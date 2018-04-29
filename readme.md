@@ -5,3 +5,14 @@ Diököl is built on the Lua programming language. It is closely related to the 
 ## Releases
 
 https://github.com/arce/Diokol/releases
+
+
+
+## Examples
+
+### Basic
+
+#### Arrays
+
+![Array](http://github.com/arce/Diokol/blob/master/examples/Basics/Arrays/Array.png)
+![Array2D](http://github.com/arce/Diokol/blob/master/examples/Basics/Arrays/Array2D.png)
