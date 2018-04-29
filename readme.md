@@ -15,4 +15,4 @@ https://github.com/arce/Diokol/releases
 #### Arrays
 
 [Array](examples/Basics/Arrays/Array.png)
-![Array2D](http://github.com/arce/Diokol/blob/master/examples/Basics/Arrays/Array2D.png)
+![Array2D](http://raw.github.com/arce/Diokol/blob/master/examples/Basics/Arrays/Array2D.png)
