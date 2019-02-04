@@ -156,8 +156,12 @@ int main(int argc, char *argv[]) {
  GLXFBConfig *fbc;
  GLXFBConfig *fbConfigs;
  int fbConfigsCount = 0;
-int scr;
+ int scr;
 
+ if( argc >= 2 )
+      strcpy(scriptname,argv[1]);
+  else
+      strcpy(scriptname,"main.lua");
  dpy = XOpenDisplay(NULL);
  if (dpy == NULL){
     fprintf(stderr, "could not open display\n");

@@ -386,13 +386,7 @@ int APIENTRY WinMain(HINSTANCE hCurrentInst, HINSTANCE hPreviousInst,
     LPWSTR *szArgList;
     int argCount = 0;
 
-    szArgList = CommandLineToArgvW(GetCommandLine(), &argCount);
-    if( argCount != 0 )
-        strcpy(scriptname,szArgList[1]);
-    else
-        strcpy(scriptname,"main.lua");
-    
-    MessageBox(NULL,scriptname,"SHUTDOWN ERROR",MB_OK | MB_ICONINFORMATION);
+	strcpy(scriptname,"main.lua");
     
     hInstance = hCurrentInst;
     
