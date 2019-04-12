@@ -465,16 +465,16 @@ static int P5_Arc(lua_State *L) {
 	vgClearPath(shape_path,VG_PATH_CAPABILITY_APPEND_TO);
 	switch (ctx->ellipseMode) {
 	case P5_CORNERS:
-		vguArc(shape_path,(x+a)/2,(y+b)/2, a-x, b-y,start,stop,arcType);
+		vguArc(shape_path,(x+a)/2,(y+b)/2, a-x, b-y,start,stop-start,arcType);
 		break;
 	case P5_CENTER:
-		vguArc(shape_path,x,y,a,b,start,stop,arcType);
+		vguArc(shape_path,x,y,a,b,start,stop-start,arcType);
 		break;
 	case P5_RADIUS:
-		vguArc(shape_path,x,y,a*2,b*2,start,stop,arcType);
+		vguArc(shape_path,x,y,a*2,b*2,start,stop-start,arcType);
 	   	break;
 	case P5_CORNER:
-		vguArc(shape_path,x+a/2,y+b/2,a,b,start,stop,arcType);
+		vguArc(shape_path,x+a/2,y+b/2,a,b,start,stop-start,arcType);
 	   	break;
 	}
 	_FillPath(shape_path);

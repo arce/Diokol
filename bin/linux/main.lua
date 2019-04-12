@@ -10,7 +10,7 @@ local mouseY=0
 
 function setup()
   size(640,480)  -- Set the size of the window
-  smooth()
+--  smooth()
 end
 
 function draw()
