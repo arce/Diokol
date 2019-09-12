@@ -1877,8 +1877,8 @@ void vg_init(int w,int h) {
 	vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
 	vgClear(0,0,480,640);
 	vgSeti(VG_RENDERING_QUALITY, VG_RENDERING_QUALITY_FASTER);
-    fonts[fontId]=_createFontFromFile("default.ttf",13);
-    fHeight[fontId] = fSize[fontId] = 13;
+    //fonts[fontId]=_createFontFromFile("default.ttf",13);
+    //fHeight[fontId] = fSize[fontId] = 13;
 }
 
 void vg_call(char *fn_name) {
