@@ -25,6 +25,23 @@
     #define INITIAL_WINDOW_HEIGHT 480
 #endif
 
+static struct termios oldChars, newChars;
+
+void initTermios(int echo) //struct termios &oldChars, struct termios &newChars)
+{
+    fcntl(0, F_SETFL, O_NONBLOCK);
+    tcgetattr(0, &oldChars); /* grab old terminal i/o settings */
+    newChars = oldChars; /* make new settings same as old settings */
+    newChars.c_lflag &= ~ICANON; /* disable buffered i/o */
+    newChars.c_lflag &= echo ? ECHO : ~ECHO; /* set echo mode */
+    tcsetattr(0, TCSANOW, &newChars); /* use these new terminal i/o settings now */
+}
+
+void resetTermios(void)//struct termios &oldChars)
+{
+    tcsetattr(0, TCSANOW, &oldChars);
+}
+
 // OpenVG variables
 void *vgContext = NULL;
 void *vgWindowSurface = NULL;
@@ -203,6 +220,10 @@ void destroyOpenVG(void) {
 	lua_close(L);
 }
 
+void vgResizeSurfaceSH(VGint width, VGint height) {}
+
+static int resizeWindow(int w,int h) {}
+
 void swapBuffers(void) {
 	assert(vgGetError() == VG_NO_ERROR);
 	eglSwapBuffers(state->display, state->surface);
@@ -279,6 +300,8 @@ int main(int argc, const char * argv[]) {
     framesCounter = 0;
     done = displayHelp = displayAbout = 0;
     // main loop
+    char ch;
+    initTermios(0); //oldChars, newChars);
     while (!done) {
 		 //sleep_ms(1000/frameRate);
         // process keyboard and mouse events
@@ -287,7 +310,10 @@ int main(int argc, const char * argv[]) {
            drawScene();
  //           drawScene(surfaceWidth, surfaceHeight);
             swapBuffers();
+            ch = getchar();
+            if (ch=='q') break;
     }
+    resetTermios();
     destroyOpenVG();
     killWindow();
     return EXIT_SUCCESS;
