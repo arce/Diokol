@@ -8,7 +8,6 @@
 #include "VG/vgu.h"
 #include "EGL/egl.h"
 #include "bcm_host.h"
-#include "eglstate.h"
 #include "oglinit.h"
 
 #include "diokol.h"
@@ -195,7 +194,6 @@ int mouseinit(int w, int h) {
 unsigned int initOpenVG(int width, int height) {
 
 	vg_init(width,height);
-	lua_init();
 	return 1;
 }
 
@@ -253,17 +251,23 @@ void init(int *w, int *h) {
 	*h = state->window_height;
 }
 
-int main(void) {
+int main(int argc, const char * argv[]) {
 	int w, h;
 //    initWindowSize(100,100,640,480);
     init(&w, &h);
-    printf("%d,%d\n",w,h);
+     if( argc >= 2 )
+        strcpy(scriptname,argv[1]);
+     else
+        strcpy(scriptname,"main.lua");
     
     // initialize AmanithVG
     if (!initOpenVG(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT)) {
         killWindow();
         return EXIT_FAILURE;
     }
+    
+    lua_init(argc,argv);
+    
     // init application
  //   initApp(vgPrivGetSurfaceWidthMZT(vgWindowSurface), vgPrivGetSurfaceHeightMZT(vgWindowSurface));
     // start frame counter

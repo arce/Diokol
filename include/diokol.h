@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <sys/time.h>
 
 #ifdef __linux__
 #include <stb/stb_math.h>
@@ -342,9 +343,18 @@ static int resizeWindow(int,int);
 // pushStyle()
 // redraw()
 
+static int P5_Time(lua_State *L) {
+    struct timeval tv;
+    long long t;
+
+    gettimeofday(&tv,NULL);
+    t = (tv.tv_sec*1000)+(tv.tv_usec/1000);
+    lua_pushnumber(L,t);
+    return 1;
+}
+
 static int P5_Exit(lua_State *L) {
-	done = true;
-	return 0;
+	exit(0);
 }
 
 static int P5_Loop(lua_State *L) {
@@ -1069,7 +1079,7 @@ static int P5_Translate(lua_State *L) {
 
 static int _SetStyle(VGfloat* color,lua_State *L) {
 	color[3] = 1;
-	char* str; int hexValue;
+	char* str; VGuint hexValue;
 	if (lua_type(L,1) == LUA_TSTRING) {
 		str = luaL_checkstring(L, 1);
 		str[0]=' ';
@@ -1164,22 +1174,37 @@ static int P5_Blue(lua_State *L) {
 	return 1;
 }
 
-static int P5_Color(lua_State *L) {
-	VGuint r = luaL_checknumber(L, 1);
-	VGuint g = luaL_checknumber(L, 2);
-	VGuint b = luaL_checknumber(L, 3);
-	VGuint a = luaL_checknumber(L, 4);
-	int c = ((r & 0xff) << 24) + ((g & 0xff) << 16) + 
-		((b & 0xff) << 8) + (a & 0xff);
-   lua_pushnumber(L,c);
-	return 1;
+static int P5_Color(lua_State *L) {	
+  int r,g,b,a;
+  if (lua_gettop(L)==1) {
+	r = g = b = luaL_checknumber(L, 1);
+	a = 255; 
+  } else if (lua_gettop(L)==2) {
+	r = g = b = luaL_checknumber(L, 1);
+	a = luaL_checknumber(L, 2);
+  } else if (lua_gettop(L)==3) {
+	r = luaL_checknumber(L, 1);
+	g = luaL_checknumber(L, 2);
+	b = luaL_checknumber(L, 3);
+	a = 255;
+  } else if (lua_gettop(L)==4) {
+	r = luaL_checknumber(L, 1);
+	g = luaL_checknumber(L, 2);
+	b = luaL_checknumber(L, 3);
+	a = luaL_checknumber(L, 4);
+  }
+  int c = ((a & 0xff) << 24) + ((r & 0xff) << 16) + 
+		((g & 0xff) << 8) + (b & 0xff);
+  lua_pushnumber(L,c);
+  return 1;
 }
+		
 
 static int P5_Green(lua_State *L) {   
-	VGuint hexValue = luaL_checkint(L, 1);
+   VGuint hexValue = luaL_checkint(L, 1);
    VGubyte g = ((hexValue >> 16) & 0xFF);
    lua_pushnumber(L,g);
-	return 1;
+   return 1;
 }
 
 static int P5_LerpColor(lua_State *L) {
@@ -1187,25 +1212,23 @@ static int P5_LerpColor(lua_State *L) {
 	VGuint cb = luaL_checkint(L, 2);
 	float t = luaL_checknumber(L, 3);
 	
-	VGubyte ar = ((ca >> 24) & 0xFF);
-	VGubyte ag = ((ca >> 16) & 0xFF);
-	VGubyte ab = ((ca >> 8) & 0xFF);
-	VGubyte aa = ((ca) & 0xFF);
+	VGubyte aa = ((ca >> 24) & 0xFF);
+	VGubyte ar = ((ca >> 16) & 0xFF);
+	VGubyte ag = ((ca >> 8) & 0xFF);
+	VGubyte ab = ((ca) & 0xFF);
 	
-	VGubyte br = ((cb >> 24) & 0xFF);
-	VGubyte bg = ((cb >> 16) & 0xFF);
-	VGubyte bb = ((cb >> 8) & 0xFF);
-	VGubyte ba = ((cb) & 0xFF);
+	VGubyte ba = ((cb >> 24) & 0xFF);
+	VGubyte br = ((cb >> 16) & 0xFF);
+	VGubyte bg = ((cb >> 8) & 0xFF);
+	VGubyte bb = ((cb) & 0xFF);
 	
 	VGubyte r = ar + (br - ar) * t;
 	VGubyte g = ag + (bg - ag) * t;
 	VGubyte b = ab + (bb - ab) * t;
 	VGubyte a = aa + (ba - aa) * t;
 
-	int c = ((r & 0xff) << 24) +
-		((g & 0xff) << 16) + 
-		((b & 0xff) << 8) + 
-		(a & 0xff);
+	int c = ((a & 0xff) << 24) + ((r & 0xff) << 16) + 
+		((g & 0xff) << 8) + (b & 0xff);
    lua_pushnumber(L,c);
    return 1;
 }
@@ -1947,9 +1970,21 @@ static void create_array_type(lua_State* L) {
    luaL_openlib(L, NULL, array, 0);
 }
 
-int luaRegisterAPI() {
+int luaRegisterAPI(int argc, const char * argv[]) {
 
 	create_array_type(L);
+    
+    if (argc>=2)
+      lua_newtable(L);
+    
+    for (int i=2; i < argc; i++) {
+        lua_pushnumber(L, i-1);
+        lua_pushnumber(L, atoi(argv[i]));
+        lua_rawset(L, -3);
+    }
+    
+    if (argc>=2)
+      lua_setglobal(L,"args");
     
 	lua_pushnumber(L,P5_NONE);
 	lua_setglobal(L,"NONE");
@@ -2087,6 +2122,9 @@ int luaRegisterAPI() {
 
 	lua_pushcfunction(L,P5_Exit);
 	lua_setglobal(L,"exit");
+	
+	lua_pushcfunction(L,P5_Time);
+	lua_setglobal(L,"time");
 
 	lua_pushcfunction(L,P5_Loop);
 	lua_setglobal(L,"loop");
@@ -2124,13 +2162,13 @@ int luaRegisterAPI() {
 	lua_pushcfunction(L,P5_Smooth);
 	lua_setglobal(L,"smooth");
    
-   lua_pushcfunction(L,P5_Width);
+    lua_pushcfunction(L,P5_Width);
 	lua_setglobal(L,"width");
 	
 	lua_pushcfunction(L,P5_Arc);
 	lua_setglobal(L,"arc");
    
-   lua_pushcfunction(L,P5_Ellipse);
+    lua_pushcfunction(L,P5_Ellipse);
 	lua_setglobal(L,"ellipse");
 	
 	lua_pushcfunction(L,P5_Line);
@@ -2370,10 +2408,10 @@ int luaRegisterAPI() {
 	return 0;
 }
 
-void lua_init() {
+void lua_init(int argc, const char * argv[]) {
 	L = luaL_newstate();
 	luaL_openlibs(L);
-	luaRegisterAPI();
+	luaRegisterAPI(argc,argv);
     
     char filepath[256];
     strcpy(filepath,mainPath);

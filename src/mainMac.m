@@ -163,7 +163,6 @@ id window;
 - (unsigned int) initOpenVG :(int)width :(int)height {
     vgCreateContextSH(width,height);
     vg_init(width,height);
-    lua_init();
     return 1;
 }
 
@@ -309,6 +308,8 @@ int main(int argc, const char * argv[]) {
       strcpy(scriptname,argv[1]);
   else
       strcpy(scriptname,"main.lua");
+      
+  lua_init(argc,argv);
         
   [window setAcceptsMouseMovedEvents:YES];
   [window setTitle: @"Diököl"];
