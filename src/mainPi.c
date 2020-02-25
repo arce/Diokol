@@ -225,7 +225,7 @@ void vgResizeSurfaceSH(VGint width, VGint height) {}
 static int resizeWindow(int w,int h) {}
 
 void swapBuffers(void) {
-	assert(vgGetError() == VG_NO_ERROR);
+	assert(vgGetError() == VG_NO_ERROR) printf("%d\n",vgGetError());
 	eglSwapBuffers(state->display, state->surface);
 	assert(eglGetError() == EGL_SUCCESS);
 }
