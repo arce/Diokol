@@ -355,6 +355,7 @@ static int P5_Time(lua_State *L) {
 
 static int P5_Exit(lua_State *L) {
 	done = true;
+	app_close();
 }
 
 static int P5_Loop(lua_State *L) {

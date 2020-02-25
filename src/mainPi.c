@@ -225,7 +225,7 @@ void vgResizeSurfaceSH(VGint width, VGint height) {}
 static int resizeWindow(int w,int h) {}
 
 void swapBuffers(void) {
-	assert(vgGetError() == VG_NO_ERROR) printf("%d\n",vgGetError());
+	assert(vgGetError() == VG_NO_ERROR);
 	eglSwapBuffers(state->display, state->surface);
 	assert(eglGetError() == EGL_SUCCESS);
 }
@@ -272,6 +272,13 @@ void init(int *w, int *h) {
 	*h = state->window_height;
 }
 
+void app_close() {
+  resetTermios();
+  destroyOpenVG();
+  killWindow();
+  exit(EXIT_SUCCESS);
+}
+
 int main(int argc, const char * argv[]) {
 	int w, h;
 //    initWindowSize(100,100,640,480);
@@ -302,7 +309,7 @@ int main(int argc, const char * argv[]) {
     // main loop
     char ch;
     initTermios(0); //oldChars, newChars);
-    while (!done) {
+    while (true) {
 		 //sleep_ms(1000/frameRate);
         // process keyboard and mouse events
         // check if some information text must be displayed
@@ -313,8 +320,5 @@ int main(int argc, const char * argv[]) {
             ch = getchar();
             if (ch=='q') break;
     }
-    resetTermios();
-    destroyOpenVG();
-    killWindow();
-    return EXIT_SUCCESS;
+    app_close();
 }
