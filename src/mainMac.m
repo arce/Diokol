@@ -16,6 +16,7 @@
 #endif
 
 id window;
+NSOpenGLView *view;
 
 @interface OpenGLView : NSOpenGLView <NSWindowDelegate> {
 }
@@ -51,7 +52,7 @@ id window;
 
 - (void) dealloc {
     [self endOpenVG];
-    [super dealloc];
+  //  [super dealloc];
     [window release];
 }
 
@@ -290,9 +291,12 @@ static int resizeWindow(int w,int h) {
     [window center];
 }
 
-int main(int argc, const char * argv[]) {
+void app_close() {
+  [view dealloc];
+  exit(EXIT_SUCCESS);
+}
 
-  OpenGLView *view;
+int main(int argc, const char * argv[]) {
   NSRect frame = NSMakeRect(0, 0, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
     
   [NSAutoreleasePool new];

@@ -333,6 +333,8 @@ void bail(lua_State *L, int error, char *msg){
 
 static void vg_call(char *fn_name);
 
+static void app_close();
+
 static int resizeWindow(int,int);
 
 // Structure commands:
@@ -524,7 +526,8 @@ static int P5_Line(lua_State *L) {
 		luaL_checknumber(L, 1),luaL_checknumber(L, 2),
 		luaL_checknumber(L, 3),luaL_checknumber(L, 4)
 	};
-	vgModifyPathCoords(line_path,0,2,coords);
+	vgClearPath(line_path,VG_PATH_CAPABILITY_APPEND_TO);
+	vguLine(line_path,coords[0],coords[1],coords[2],coords[3]);
 	_StrokePath(line_path);
 	_EventPath(line_path);
 }
@@ -607,7 +610,8 @@ static int P5_Rect(lua_State *L) {
 		coords[4] = -a+x;
 		break;
 	}
-	vgModifyPathCoords(rect_path, 0, 4, coords);
+	vgClearPath(rect_path,VG_PATH_CAPABILITY_APPEND_TO);
+	vguRoundRect(rect_path,coords[0],coords[1],coords[2],coords[3],coords[4],coords[5]);
 	_FillPath(rect_path);
 	_StrokePath(rect_path);
 	_EventPath(rect_path);
