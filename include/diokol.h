@@ -347,7 +347,7 @@ static int resizeWindow(int,int);
 
 static int P5_Time(lua_State *L) {
     struct timeval tv;
-    long long t;
+    float t;
 
     gettimeofday(&tv,NULL);
     t = (tv.tv_sec*1000)+(tv.tv_usec/1000);
