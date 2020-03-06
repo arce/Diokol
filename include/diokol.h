@@ -2129,7 +2129,7 @@ int luaRegisterAPI(int argc, const char * argv[]) {
 	lua_setglobal(L,"exit");
 	
 	lua_pushcfunction(L,P5_Time);
-	lua_setglobal(L,"time");
+	lua_setglobal(L,"timeMs");
 
 	lua_pushcfunction(L,P5_Loop);
 	lua_setglobal(L,"loop");
