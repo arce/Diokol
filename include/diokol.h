@@ -347,7 +347,7 @@ static int resizeWindow(int,int);
 
 static int P5_Time(lua_State *L) {
     struct timeval tv;
-    float t;
+    double t;
 
     gettimeofday(&tv,NULL);
     t = (tv.tv_sec*1000)+(tv.tv_usec/1000);
@@ -610,10 +610,19 @@ static int P5_Rect(lua_State *L) {
 		coords[4] = -a+x;
 		break;
 	}
-	vgClearPath(rect_path,VG_PATH_CAPABILITY_APPEND_TO);
-	vguRoundRect(rect_path,coords[0],coords[1],coords[2],coords[3],coords[4],coords[5]);
+	//vgClearPath(rect_path,VG_PATH_CAPABILITY_APPEND_TO);
+	//vguRoundRect(rect_path,coords[0],coords[1],coords[2],coords[3],coords[4],coords[5]);
+	
+	VGfloat matrix[9];
+	vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
+	vgGetMatrix(matrix);
+	vgTranslate(coords[0],coords[1]);
+	vgScale(coords[3],coords[4]);
+
 	_FillPath(rect_path);
 	_StrokePath(rect_path);
+	
+	vgLoadMatrix(matrix);
 	_EventPath(rect_path);
 }
 
@@ -2129,7 +2138,7 @@ int luaRegisterAPI(int argc, const char * argv[]) {
 	lua_setglobal(L,"exit");
 	
 	lua_pushcfunction(L,P5_Time);
-	lua_setglobal(L,"timeMs");
+	lua_setglobal(L,"time");
 
 	lua_pushcfunction(L,P5_Loop);
 	lua_setglobal(L,"loop");
