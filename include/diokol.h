@@ -129,14 +129,20 @@ bool contains;
 
 VGfloat matrix[9];
 
+int pcount = 0;
+
 #define _deg(angleRadians) (angleRadians * 180.0 / M_PI)
 #define _rad(angleDegrees) (angleDegrees / 180.0 * M_PI)
 
 #define _StrokePath(_path) \
-	if (!noStroke) vgDrawPath(_path, VG_STROKE_PATH)
+	if (!noStroke) vgDrawPath(_path, VG_STROKE_PATH) \
+	pcount++; \
+	if (pcount==1000) { pcount = 0; vgFlush(); }
 
 #define _FillPath(_path) \
-	if (!noFill) vgDrawPath(_path, VG_FILL_PATH)
+	if (!noFill) vgDrawPath(_path, VG_FILL_PATH) \
+	pcount++; \
+	if (pcount==1000) { pcount = 0; vgFlush(); }
 
 int p,evtExists,evtCode,evtn;
 
@@ -610,20 +616,12 @@ static int P5_Rect(lua_State *L) {
 		coords[4] = -a+x;
 		break;
 	}
-	//vgClearPath(rect_path,VG_PATH_CAPABILITY_APPEND_TO);
-	//vguRoundRect(rect_path,coords[0],coords[1],coords[2],coords[3],coords[4],coords[5]);
+	vgClearPath(rect_path,VG_PATH_CAPABILITY_APPEND_TO);
+	vguRect(rect_path,coords[0],coords[1],coords[2],coords[3],coords[4],coords[5]);
 	
-	VGfloat matrix[9];
-	vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
-	vgGetMatrix(matrix);
-	vgTranslate(coords[0],coords[1]);
-	vgScale(coords[3],coords[4]);
-
 	_FillPath(rect_path);
 	_StrokePath(rect_path);
-	
-	vgLoadMatrix(matrix);
-	_EventPath(rect_path);
+	_EventPath(dstPath);
 }
 
 static int P5_Triangle(lua_State *L) {
@@ -1886,7 +1884,7 @@ void vg_init(int w,int h) {
 	line_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,1.0f,0.0f,2,4, VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_MODIFY | VG_PATH_CAPABILITY_PATH_TRANSFORMED_BOUNDS);
 	vguLine(line_path, 0.0f, 0.0f, 1.0f, 1.0f);
 
-	rect_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,1.0f,0.0f,5,5, VG_PATH_CAPABILITY_ALL);
+	rect_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,1.0f,0.0f,5,5, VG_PATH_CAPABILITY_APPEND_TO);
 	vguRect(rect_path, 0.0f, 0.0f, 1.0f, 1.0f);
 
 	roundrect_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F, 1.0f, 0.0f, 10, 26,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_MODIFY | VG_PATH_CAPABILITY_PATH_TRANSFORMED_BOUNDS);
