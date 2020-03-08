@@ -543,7 +543,7 @@ void vg_init(int w,int h) {
 	int style[] = {0,0,1,-1,-1};
 	
 	for (int i=0; i<PATH_SIZE; i++) {
-	  paths[i] = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,1000,4,VG_PATH_CAPABILITY_APPEND_FROM);
+	  paths[i] = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,1000,4,VG_PATH_CAPABILITY_APPEND_TO);
 	  memcpy(pathStyle[i],style,sizeof(int)*5);
 	  pathFree[i] = true;
 	}
