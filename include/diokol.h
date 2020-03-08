@@ -223,14 +223,14 @@ static int findPath(int style[5]) {
 
   int i = hash % PATH_SIZE;
   if (memcmp(style,pathStyle[i],sizeof(int)*5)==0) {
-	memcpy(pathStyle[i],style,sizeof(int)*5);
+	  memcpy(pathStyle[i],style,sizeof(int)*5);
 	pathFree[i] = false;
 	return i; 
   }
   int j = (i+1) % PATH_SIZE;
   while (j!=i) {
 	if ((memcmp(style,pathStyle[j],sizeof(int)*5)==0) || pathFree[j]) {
-	  memcpy(pathStyle[j],style,sizeof(int)*5);
+	     memcpy(pathStyle[j],style,sizeof(int)*5);
 	  pathFree[j] = false;
 	  return j;
 	}
@@ -242,7 +242,7 @@ static int findPath(int style[5]) {
 }
 
 static int P5_Rect(lua_State *L) {
-  
+
   VGfloat a = luaL_checknumber(L, 1);
   VGfloat b = luaL_checknumber(L, 2);
   VGfloat c = luaL_checknumber(L, 3);
@@ -338,7 +338,8 @@ static int Color(lua_State *L) {
   int r,g,b,a;
   if (lua_gettop(L)==1) {
 	r = g = b = luaL_checknumber(L, 1);
-	a = 255; 
+	if (r > 255) return r;
+	a = 255;
   } else if (lua_gettop(L)==2) {
 	r = g = b = luaL_checknumber(L, 1);
 	a = luaL_checknumber(L, 2);
