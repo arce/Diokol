@@ -168,10 +168,10 @@ static void app_close();
 static int resizeWindow(int,int);
 		
 static void getArrColor(VGfloat* arr, int color) {
-  arr[0] = ((color >> 24) & 0xFF)/255.0;
-  arr[1] = ((color >> 16) & 0xFF)/255.0;
-  arr[2] = ((color >> 8) & 0xFF)/255.0;
-  arr[3] = ((color) & 0xFF)/255.0;
+  arr[3] = ((color >> 24) & 0xFF)/255.0;
+  arr[2] = ((color >> 16) & 0xFF)/255.0;
+  arr[1] = ((color >> 8) & 0xFF)/255.0;
+  arr[0] = ((color) & 0xFF)/255.0;
 }
 
 static int P5_Time(lua_State *L) {
@@ -354,8 +354,8 @@ static int Color(lua_State *L) {
 	b = luaL_checknumber(L, 3);
 	a = luaL_checknumber(L, 4);
   }
-  return ((r & 0xff) << 24) + ((g & 0xff) << 16) + 
-		((b & 0xff) << 8) + (a & 0xff);
+  return ((a & 0xff) << 24) + ((b & 0xff) << 16) + 
+		((g & 0xff) << 8) + (r & 0xff);
 }
 
 static int P5_Background(lua_State *L) {
