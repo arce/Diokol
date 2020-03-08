@@ -197,6 +197,7 @@ static int P5_Size(lua_State *L) {
 }
 
 static void flushPath(int index) {
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)==0) return;
   VGfloat RGBA[4];
   if (pathStyle[index][FILL_COLOR]!=-1) {
 	getArrColor(RGBA,pathStyle[index][FILL_COLOR]);
