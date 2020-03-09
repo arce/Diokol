@@ -122,6 +122,9 @@ VGPath paths[PATH_SIZE];
 
 int mode[5] = {P5_CENTER,P5_CORNER,0,0,0}; // [0] = ellipse, [1] = rect, [2] = image, [3] = shape, [4] = text
 int style[5] = {0,0,1,0xFF00FF00,0xFF000000}; // [0] = strokeJoin, [1] = strokeCap, [2] = strokeWeight, [3] = strokeColor, [4] = fillColor
+
+int32_t my_32bit_int;
+
 VGfloat transform[9];
 
 int pathStyle[PATH_SIZE][5];
