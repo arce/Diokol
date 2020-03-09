@@ -113,6 +113,9 @@ typedef int bool;
 #define KEY_RELEASED 6
 #define WINDOW_RESIZED 7
 
+#define _deg(angleRadians) (angleRadians * 180.0 / M_PI)
+#define _rad(angleDegrees) (angleDegrees / 180.0 * M_PI)
+
 int error;
 
 VGPaint strokePaint;
