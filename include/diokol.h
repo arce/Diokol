@@ -290,6 +290,47 @@ static int8_t assignLookup(int32_t color) {
   return i;
 }
 
+static int P5_Arc(lua_State *L) {
+    VGUArcType arcType = VGU_ARC_PIE;
+    VGfloat x,y,a,b,start,stop,type;
+    x = luaL_checknumber(L, 1);
+    y = luaL_checknumber(L, 2);
+    a = luaL_checknumber(L, 3);
+    b = luaL_checknumber(L, 4);
+    start = _deg(luaL_checknumber(L, 5));
+    stop = _deg(luaL_checknumber(L, 6));
+    if (lua_gettop(L) == 7)
+        type = luaL_checkint(L, 7);
+    else
+        type = 0;
+    if (type == P5_PIE)
+        arcType = VGU_ARC_PIE;
+    else if (type == P5_CHORD)
+        arcType = VGU_ARC_CHORD;
+    else if (type == P5_OPEN)
+        arcType = VGU_ARC_OPEN;
+    int index = findPath(style.data);
+    
+    switch (mode[ELLIPSE]) {
+      case P5_CORNERS:
+        vguArc(paths[index],(x+a)/2,(y+b)/2, a-x, b-y,start,stop-start,arcType);
+        break;
+      case P5_CENTER:
+        vguArc(paths[index],x,y,a,b,start,stop-start,arcType);
+        break;
+      case P5_RADIUS:
+        vguArc(paths[index],x,y,a*2,b*2,start,stop-start,arcType);
+        break;
+      case P5_CORNER:
+        vguArc(paths[index],x+a/2,y+b/2,a,b,start,stop-start,arcType);
+        break;
+    }
+    
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>=999)
+        flushPathByIndex(index);
+    return 0;
+}
+
 static int P5_Rect(lua_State *L) {
 
   VGfloat a = luaL_checknumber(L, 1);
@@ -297,17 +338,21 @@ static int P5_Rect(lua_State *L) {
   VGfloat c = luaL_checknumber(L, 3);
   VGfloat d = luaL_checknumber(L, 4);
   
-  if (mode[RECT]==P5_CORNERS) {
-	c =  c - a; 
-	d =  d - b;
-  } else if (mode[RECT]==P5_CENTER) {
-	a = a - c/2;
-	b = b - d/2;
-  } else if (mode[RECT]==P5_RADIUS) {
-	a = a - c;
-	b = b - d;
-	c = c*2;
-	d = d*2;
+  switch (mode[RECT]) {
+    case P5_CORNERS:
+	  c =  c - a;
+	  d =  d - b;
+      break;
+    case P5_CENTER:
+	  a = a - c/2;
+	  b = b - d/2;
+      break;
+    case P5_RADIUS:
+	  a = a - c;
+	  b = b - d;
+	  c = c*2;
+	  d = d*2;
+      break;
   }
   
   int index = findPath(style.data);
@@ -324,17 +369,21 @@ static int P5_Ellipse(lua_State *L) {
   VGfloat c = luaL_checknumber(L, 3);
   VGfloat d = luaL_checknumber(L, 4);
   
-  if (mode[ELLIPSE]==P5_CORNER) {
-	a = a + c/2;
-	b = b + d/2;
-  } else if (mode[ELLIPSE]==P5_CORNERS) {
-	a = (a + c)/2 ;
-	b = (b + d)/2;
-	c = (c - a)*2;
-	d = (d - b)*2;
-  } else if (mode[ELLIPSE]==P5_RADIUS) {
-	c = c*2;
-	d = d*2;
+  switch (mode[ELLIPSE]) {
+    case P5_CORNER:
+	  a = a + c/2;
+	  b = b + d/2;
+      break;
+    case P5_CORNERS:
+	  a = (a + c)/2 ;
+	  b = (b + d)/2;
+	  c = (c - a)*2;
+	  d = (d - b)*2;
+      break;
+    case P5_RADIUS:
+	  c = c*2;
+	  d = d*2;
+      break;
   }
     
   int index = findPath(style.data);
