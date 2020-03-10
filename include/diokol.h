@@ -41,7 +41,8 @@ typedef int bool;
 #define false 0
 #define NIL -1
 
-#define PATH_SIZE 16
+#define PATH_SIZE 24
+#define COLOR_SIZE 128
 
 #define TRANSFORM 0
 #define STROKE_ATTR 1
@@ -126,12 +127,13 @@ VGPath paths[PATH_SIZE];
 int mode[5] = {P5_CENTER,P5_CORNER,0,0,0}; // [0] = ellipse, [1] = rect, [2] = image, [3] = shape, [4] = text
 //int style[5] = {0,0,1,0xFF00FF00,0xFF000000}; // [0] = strokeJoin, [1] = strokeCap, [2] = strokeWeight, [3] = strokeColor, [4] = fillColor
 
-int32_t colors[128];
-VGfloat transforms[128][9];
+VGfloat transforms[COLOR_SIZE][9];
+
+typedef __int128 int128_t;
 
 union StyleUnion {
-  int8_t attr[4];
-  int32_t data;
+  int32_t attr[4];
+  int128_t data;
 };
 
 union StyleUnion style;
@@ -203,25 +205,40 @@ static int P5_Exit(lua_State *L) {
 }
 
 static int P5_Size(lua_State *L) {
-  width = (int)luaL_checknumber(L, 1);
-  height = (int)luaL_checknumber(L, 2);
+  width = luaL_checkint(L, 1);
+  height = luaL_checkint(L, 2);
   resizeWindow(width,height);
   vgResizeSurfaceSH(width,height);
   return 0;
+}
+
+static int P5_FrameRate(lua_State *L) {
+  frameRate = luaL_checkint(L, 1);
+  return 0;
+}
+
+static int P5_Height(lua_State *L) {
+  lua_pushnumber(L, height);
+  return 1;
+}
+
+static int P5_Width(lua_State *L) {
+  lua_pushnumber(L, width);
+  return 1;
 }
 
 static void flushPathByIndex(int index) {
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)==0) return;
   VGfloat RGBA[4];
   if (pathStyle[index].attr[FILL_COLOR]!=NIL) {
-	getArrColor(RGBA,colors[pathStyle[index].attr[FILL_COLOR]]);
+	getArrColor(RGBA,pathStyle[index].attr[FILL_COLOR]);
 	vgSetParameteri(fillPaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
     vgSetParameterfv(fillPaint, VG_PAINT_COLOR, 4, RGBA);
     vgSetPaint(fillPaint, VG_FILL_PATH);
     vgDrawPath(paths[index], VG_FILL_PATH);
   }
   if (pathStyle[index].attr[STROKE_COLOR]!=NIL) {
-	getArrColor(RGBA,colors[pathStyle[index].attr[STROKE_COLOR]]);
+	getArrColor(RGBA,pathStyle[index].attr[STROKE_COLOR]);
 	vgSetParameteri(strokePaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
     vgSetParameterfv(strokePaint, VG_PAINT_COLOR, 4, RGBA);
     vgSetPaint(strokePaint, VG_STROKE_PATH);
@@ -230,38 +247,13 @@ static void flushPathByIndex(int index) {
   vgClearPath(paths[index], VG_PATH_CAPABILITY_APPEND_TO);
 }
 
-static void flushPathByColor(int8_t color) {
-  for (int index=0; index<PATH_SIZE; index++) {
-    if ((vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)==0) ||
-        ((pathStyle[index].attr[FILL_COLOR]!=color) &&
-         (pathStyle[index].attr[STROKE_COLOR]!=color)))
-        continue;
-    VGfloat RGBA[4];
-    if (pathStyle[index].attr[FILL_COLOR]==color) {
-      getArrColor(RGBA,colors[color]);
-      vgSetParameteri(fillPaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
-      vgSetParameterfv(fillPaint, VG_PAINT_COLOR, 4, RGBA);
-      vgSetPaint(fillPaint, VG_FILL_PATH);
-      vgDrawPath(paths[index], VG_FILL_PATH);
-    }
-    if (pathStyle[index].attr[STROKE_COLOR]==color) {
-      getArrColor(RGBA,colors[color]);
-      vgSetParameteri(strokePaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
-      vgSetParameterfv(strokePaint, VG_PAINT_COLOR, 4, RGBA);
-      vgSetPaint(strokePaint, VG_STROKE_PATH);
-      vgDrawPath(paths[index], VG_STROKE_PATH);
-    }
-    vgClearPath(paths[index], VG_PATH_CAPABILITY_APPEND_TO);
-  }
-}
-
-static int8_t findPath(int32_t param) {
-  int8_t i = param % PATH_SIZE;
+static int8_t findPath(int128_t param) {
+  int i = param % 17;
   if ((pathStyle[i].data==param) || (pathStyle[i].data==NIL)) {
     pathStyle[i].data = param;
 	return i; 
   }
-  int8_t j = (i+1) % PATH_SIZE;
+  int j = (i+1) % PATH_SIZE;
   while (j!=i) {
 	if ((pathStyle[j].data==param) || (pathStyle[j].data==NIL)) {
       pathStyle[j].data = param;
@@ -271,25 +263,6 @@ static int8_t findPath(int32_t param) {
   }
   flushPathByIndex(i);
   pathStyle[i].data = param;
-  return i;
-}
-
-static int8_t assignLookup(int32_t color) {
-  int8_t i = color % 128;
-  if ((colors[i]==color) || (colors[i]==0)) {
-    colors[i] = color;
-    return i;
-  }
-  int8_t j = (i+1) % 128;
-  while (j!=i) {
-    if ((colors[j]==color) || (colors[j]==0)) {
-      colors[j] = color;
-      return j;
-    }
-    j = (j+1) % 128;
-  }
-  flushPathByColor(i);
-  colors[i] = color;
   return i;
 }
 
@@ -328,8 +301,7 @@ static int P5_Arc(lua_State *L) {
         vguArc(paths[index],x+a/2,y+b/2,a,b,start,stop-start,arcType);
         break;
     }
-    
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>=999)
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>990)
         flushPathByIndex(index);
     return 0;
 }
@@ -360,8 +332,8 @@ static int P5_Rect(lua_State *L) {
   
   int index = findPath(style.data);
   vguRect(paths[index],a,b,c,d);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>=999)
-	flushPathByIndex(index);
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>990)
+    flushPathByIndex(index);
   return 0;
 }
 
@@ -391,23 +363,23 @@ static int P5_Ellipse(lua_State *L) {
     
   int index = findPath(style.data);
   vguEllipse(paths[index],a,b,c,d);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>=999)
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>990)
     flushPathByIndex(index);
   return 0;
 }
 
 static int P5_Line(lua_State *L) {
 
-    VGfloat a = luaL_checknumber(L, 1);
-    VGfloat b = luaL_checknumber(L, 2);
-    VGfloat c = luaL_checknumber(L, 3);
-    VGfloat d = luaL_checknumber(L, 4);
+  VGfloat a = luaL_checknumber(L, 1);
+  VGfloat b = luaL_checknumber(L, 2);
+  VGfloat c = luaL_checknumber(L, 3);
+  VGfloat d = luaL_checknumber(L, 4);
     
-    int index = findPath(style.data);
-    vguLine(paths[index],a,b,c,d);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>=999)
-      flushPathByIndex(index);
-    return 0;
+  int index = findPath(style.data);
+  vguLine(paths[index],a,b,c,d);
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>990)
+    flushPathByIndex(index);
+  return 0;
 }
 
 static void flushBuffers() {
@@ -434,9 +406,10 @@ static int P5_StrokeWeight(lua_State *L) {
 
 static int32_t Color(lua_State *L) {
   int r,g,b,a;
+  int32_t v;
   if (lua_gettop(L)==1) {
 	r = g = b = luaL_checknumber(L, 1);
-	if (r > 255) return r;
+    if (r > 255) { v= r; return v;}
 	a = 255;
   } else if (lua_gettop(L)==2) {
 	r = g = b = luaL_checknumber(L, 1);
@@ -466,7 +439,7 @@ static int P5_Background(lua_State *L) {
 }
 
 static int P5_Fill(lua_State *L) {
-  style.attr[FILL_COLOR] = assignLookup(Color(L));
+  style.attr[FILL_COLOR] = Color(L);
   return 0;
 }
 
@@ -476,7 +449,7 @@ static int P5_NoFill(lua_State *L) {
 }
 
 static int P5_Stroke(lua_State *L) {
-  style.attr[STROKE_COLOR] = assignLookup(Color(L));
+  style.attr[STROKE_COLOR] = Color(L);
   return 0;
 }
 
@@ -638,7 +611,7 @@ void vg_init(int w,int h) {
 	fillPaint = vgCreatePaint();
 	vgSetParameteri(fillPaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
 	
-	int8_t initValues[] = {NIL,NIL,NIL,NIL};
+	int32_t initValues[] = {NIL,NIL,NIL,NIL};
 	
     style.data = initValues;
     
@@ -646,9 +619,6 @@ void vg_init(int w,int h) {
 	  paths[i] = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,1000,4,VG_PATH_CAPABILITY_APPEND_TO);
 	  pathStyle[i].data = NIL;
 	}
-    
-    for (int i=0; i<128; i++)
-      colors[i] = 0;
     
     getArrColor(RGBA,clearColor);
 	vgSetfv(VG_CLEAR_COLOR, 4, RGBA);
@@ -859,6 +829,9 @@ int luaRegisterAPI(int argc, const char * argv[]) {
 
 // functions
 
+    lua_pushcfunction(L,P5_FrameRate);
+    lua_setglobal(L,"frameRate");
+    
     lua_pushcfunction(L,P5_Flush);
 	lua_setglobal(L,"flush");
 	
@@ -870,7 +843,16 @@ int luaRegisterAPI(int argc, const char * argv[]) {
 	  
 	lua_pushcfunction(L,P5_Size);
 	lua_setglobal(L,"size");
+    
+    lua_pushcfunction(L,P5_Height);
+    lua_setglobal(L,"height");
+    
+    lua_pushcfunction(L,P5_Width);
+    lua_setglobal(L,"width");
 	
+    lua_pushcfunction(L,P5_Arc);
+    lua_setglobal(L,"arc");
+    
 	lua_pushcfunction(L,P5_Rect);
 	lua_setglobal(L,"rect");
     
