@@ -128,6 +128,7 @@ int mode[5] = {P5_CENTER,P5_CORNER,0,0,0}; // [0] = ellipse, [1] = rect, [2] = i
 //int style[5] = {0,0,1,0xFF00FF00,0xFF000000}; // [0] = strokeJoin, [1] = strokeCap, [2] = strokeWeight, [3] = strokeColor, [4] = fillColor
 
 union StyleUnion {
+  int8_t comp[8];
   int32_t attr[2];
   int64_t data;
 };
@@ -243,22 +244,24 @@ static void flushPathByIndex(int index) {
   vgClearPath(paths[index], VG_PATH_CAPABILITY_APPEND_TO);
 }
 
-static int findPath(int64_t param) {
-  int i = param & PATH_SIZE;
-  if ((pathStyle[i].data==param) || (pathStyle[i].data==NIL)) {
-    pathStyle[i].data = param;
+static int findPath(union StyleUnion param) {
+  int i = param.comp[0] ^ param.comp[1] ^ param.comp[2] ^ param.comp[3] ^
+          param.comp[4] ^ param.comp[5] ^ param.comp[6] ^ param.comp[7];
+  i = i & PATH_SIZE;
+  if ((pathStyle[i].data==param.data) || (pathStyle[i].data==NIL)) {
+    pathStyle[i].data = param.data;
 	return i; 
   }
     int j = (i+1==PATH_SIZE) ? 0: i+1;
   while (j!=i) {
-	if ((pathStyle[j].data==param) || (pathStyle[j].data==NIL)) {
-      pathStyle[j].data = param;
+	if ((pathStyle[j].data==param.data) || (pathStyle[j].data==NIL)) {
+      pathStyle[j].data = param.data;
 	  return j;
 	}
       j = (j+1==PATH_SIZE) ? 0 : j+1;
   }
   flushPathByIndex(i);
-  pathStyle[i].data = param;
+  pathStyle[i].data = param.data;
   return i;
 }
 
@@ -281,7 +284,7 @@ static int P5_Arc(lua_State *L) {
         arcType = VGU_ARC_CHORD;
     else if (type == P5_OPEN)
         arcType = VGU_ARC_OPEN;
-    int index = findPath(style.data);
+    int index = findPath(style);
     
     switch (mode[ELLIPSE]) {
       case P5_CORNERS:
@@ -326,7 +329,7 @@ static int P5_Rect(lua_State *L) {
       break;
   }
   
-  int index = findPath(style.data);
+  int index = findPath(style);
   vguRect(paths[index],a,b,c,d);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
@@ -357,7 +360,7 @@ static int P5_Ellipse(lua_State *L) {
       break;
   }
     
-  int index = findPath(style.data);
+  int index = findPath(style);
   vguEllipse(paths[index],a,b,c,d);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
@@ -371,7 +374,7 @@ static int P5_Line(lua_State *L) {
   VGfloat c = luaL_checknumber(L, 3);
   VGfloat d = luaL_checknumber(L, 4);
     
-  int index = findPath(style.data);
+  int index = findPath(style);
   vguLine(paths[index],a,b,c,d);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
