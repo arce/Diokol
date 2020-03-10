@@ -46,8 +46,8 @@ typedef int bool;
 
 #define TRANSFORM 0
 #define STROKE_ATTR 1
-#define STROKE_COLOR 2
-#define FILL_COLOR 3
+#define STROKE_COLOR 0
+#define FILL_COLOR 1
 
 #define ELLIPSE 0
 #define RECT 1
@@ -132,8 +132,8 @@ VGfloat transforms[COLOR_SIZE][9];
 typedef __int128 int128_t;
 
 union StyleUnion {
-  int32_t attr[4];
-  int128_t data;
+  int32_t attr[2];
+  int64_t data;
 };
 
 union StyleUnion style;
@@ -247,7 +247,7 @@ static void flushPathByIndex(int index) {
   vgClearPath(paths[index], VG_PATH_CAPABILITY_APPEND_TO);
 }
 
-static int8_t findPath(int128_t param) {
+static int8_t findPath(int64_t param) {
   int i = param % 17;
   if ((pathStyle[i].data==param) || (pathStyle[i].data==NIL)) {
     pathStyle[i].data = param;
