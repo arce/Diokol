@@ -887,8 +887,31 @@ static int Dkl_KeyReleased(char key, int code) {
     return 0;
 }
 
-// Transform
+static int P5_IsKeyPressed(lua_State *L) {
+    lua_pushboolean(L,isEvent[KEY_PRESSED]);
+    return 1;
+}
 
+static int P5_Key(lua_State *L) {
+    lua_pushstring(L,keyPress);
+    return 1;
+}
+
+static int P5_KeyCode(lua_State *L) {
+    lua_pushnumber(L,keyCode);
+    return 1;
+}
+
+// Transform:
+// popMatrix()
+// printMatrix()
+// pushMatrix()
+// resetMatrix()
+// rotate()
+// scale()
+// shearX()
+// shearY()
+// translate()
 
 static int P5_PopMatrix(lua_State *L) {
     Matrix* temp = mtrx_stack;
@@ -1063,23 +1086,8 @@ static int P5_Smooth(lua_State *L) {
   return 0;
 }
 
-static int P5_IsKeyPressed(lua_State *L) {
-  lua_pushboolean(L,isEvent[KEY_PRESSED]);
-  return 1;
-}
-
 static int P5_Color(lua_State *L) {
   lua_pushnumber(L,Color(L));
-  return 1;
-}
-
-static int P5_Key(lua_State *L) {
-  lua_pushstring(L,keyPress);
-  return 1;
-}
-
-static int P5_KeyCode(lua_State *L) {
-  lua_pushnumber(L,keyCode);
   return 1;
 }
 
