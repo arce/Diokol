@@ -26,6 +26,12 @@
 #include <math.h>
 #endif
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb/stb_truetype.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+
 #include <VG/openvg.h>
 #include <VG/vgu.h>
 #include <VG/shFont.h>
@@ -48,6 +54,11 @@ typedef int bool;
 #define STROKE_ATTR 1
 #define STROKE_COLOR 0
 #define FILL_COLOR 1
+
+#define STROKE_WEIGHT 0
+#define STROKE_CAP 1
+#define STROKE_JOIN 2
+#define TRANSFORM 3
 
 #define ELLIPSE 0
 #define RECT 1
@@ -116,8 +127,6 @@ typedef int bool;
 
 #define _deg(angleRadians) (angleRadians * 180.0 / M_PI)
 #define _rad(angleDegrees) (angleDegrees / 180.0 * M_PI)
-#define _rand(min, max) \
-  ((rand() % (int)(((max) + 1) - (min))) + (min))
 
 int error;
 
@@ -129,18 +138,41 @@ VGPath paths[PATH_SIZE];
 int mode[5] = {P5_CENTER,P5_CORNER,0,0,0}; // [0] = ellipse, [1] = rect, [2] = image, [3] = shape, [4] = text
 //int style[5] = {0,0,1,0xFF00FF00,0xFF000000}; // [0] = strokeJoin, [1] = strokeCap, [2] = strokeWeight, [3] = strokeColor, [4] = fillColor
 
+VGImage images[100];
+int iWidth[100];
+int iHeight[100];
+VGFont fonts[100];
+int fHeight[100];
+int fSize[100];
+int imageCount = 0;
+int fontCount = 1;
+int pathId=0;
+int imageId=0;
+
 union StyleUnion {
-  int32_t attr[2];
+  VGuint attr[2];
+  int64_t data;
+};
+
+union PropsUnion {
+  VGshort attr[4];
   int64_t data;
 };
 
 union StyleUnion style;
 
+union PropsUnion props;
+
 VGfloat transform[9];
+VGfloat backup[9];
 
 union StyleUnion pathStyle[PATH_SIZE];
 
-VGfloat pathTrans[PATH_SIZE][9];
+union PropsUnion pathProps[PATH_SIZE];
+
+VGfloat pathTransform[PATH_SIZE][9];
+
+VGfloat zeroMatrix[9] = {0};
 
 char *eventArray[] = {"mouseMoved","mouseDragged","mousePressed","mouseReleased","mouseClicked","keyPressed","keyReleased","windowResized"};
 
@@ -161,6 +193,7 @@ int mouseButton;
 bool done=false;
 bool loop=true;
 bool initialized=false;
+int frameCount = 0;
 
 VGint width=640, height=480;
 char scriptname[256];
@@ -181,7 +214,7 @@ static void app_close();
 
 static int resizeWindow(int,int);
 		
-static void getArrColor(VGfloat* arr, int32_t color) {
+static void getArrColor(VGfloat* arr, VGuint color) {
   arr[0] = ((color >> 24) & 0xFF)/255.0;
   arr[1] = ((color >> 16) & 0xFF)/255.0;
   arr[2] = ((color >> 8) & 0xFF)/255.0;
@@ -202,12 +235,32 @@ static int P5_Exit(lua_State *L) {
   app_close();
 }
 
+static int P5_Loop(lua_State *L) {
+  loop = true;
+  return 0;
+}
+
+static int P5_NoLoop(lua_State *L) {
+  loop = false;
+  return 0;
+}
+
+static int P5_Redraw(lua_State *L) {
+  vg_call("draw");
+  return 0;
+}
+
 static int P5_Size(lua_State *L) {
   width = luaL_checkint(L, 1);
   height = luaL_checkint(L, 2);
   resizeWindow(width,height);
   vgResizeSurfaceSH(width,height);
   return 0;
+}
+
+static int P5_FrameCount(lua_State *L) {
+  lua_pushnumber(L,frameCount);
+  return 1;
 }
 
 static int P5_FrameRate(lua_State *L) {
@@ -228,6 +281,17 @@ static int P5_Width(lua_State *L) {
 static void flushPathByIndex(int index) {
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)==0) return;
   VGfloat RGBA[4];
+  if (pathProps[index].attr[TRANSFORM]!=0) {
+    vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(backup);
+    vgLoadMatrix(pathTransform[index]);
+  }
+  if (pathProps[index].attr[STROKE_WEIGHT]!=0)
+    vgSetf(VG_STROKE_LINE_WIDTH, pathProps[index].attr[STROKE_WEIGHT]);
+  if (pathProps[index].attr[STROKE_CAP]!=0)
+    vgSeti(VG_STROKE_CAP_STYLE, pathProps[index].attr[STROKE_CAP]);
+  if (pathProps[index].attr[STROKE_JOIN]!=0)
+    vgSeti(VG_STROKE_JOIN_STYLE, pathProps[index].attr[STROKE_JOIN]);
   if (pathStyle[index].attr[FILL_COLOR]!=0) {
 	getArrColor(RGBA,pathStyle[index].attr[FILL_COLOR]);
 	vgSetParameteri(fillPaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
@@ -242,22 +306,35 @@ static void flushPathByIndex(int index) {
     vgSetPaint(strokePaint, VG_STROKE_PATH);
     vgDrawPath(paths[index], VG_STROKE_PATH);
   }
+  if (pathProps[index].attr[TRANSFORM]!=0)
+    vgLoadMatrix(backup);
   vgClearPath(paths[index], VG_PATH_CAPABILITY_APPEND_TO);
 }
 
 int next=0;
 
-static int findPath(int64_t param) {
+static int findIndex() {
   int i = 0;
   for (; i<PATH_SIZE; i++) {
-    if ((pathStyle[i].data==param) || (pathStyle[i].data==0)) {
-      pathStyle[i].data = param;
+    if ((pathStyle[i].data==0) ||
+        ((pathStyle[i].data==style.data) &&
+         (pathProps[i].data==props.data))) {
+      if ((pathProps[i].attr[TRANSFORM]!=0) && (memcmp(pathTransform[i],transform,sizeof(transform))!=0))
+          continue;
+      pathStyle[i].data = style.data;
+      pathProps[i].data = props.data;
+      if (props.attr[TRANSFORM]!=0)
+        memcpy(pathTransform[i],transform,sizeof(transform));
       return i;
     }
   }
   flushPathByIndex(next);
-  pathStyle[next].data = param;
-  next = (next+1==PATH_SIZE)?0:next+1;
+  pathStyle[next].data = style.data;
+  pathProps[next].data = props.data;
+  if (props.attr[TRANSFORM]!=0)
+    memcpy(pathTransform[next],transform,sizeof(transform));
+  next++;
+  next = (next==PATH_SIZE)?0:next;
   return next;
 }
 
@@ -280,7 +357,7 @@ static int P5_Arc(lua_State *L) {
         arcType = VGU_ARC_CHORD;
     else if (type == P5_OPEN)
         arcType = VGU_ARC_OPEN;
-    int index = findPath(style.data);
+    int index = findIndex();
     
     switch (mode[ELLIPSE]) {
       case P5_CORNERS:
@@ -301,8 +378,42 @@ static int P5_Arc(lua_State *L) {
     return 0;
 }
 
-static int P5_Rect(lua_State *L) {
+static int _RoundRect(lua_State *L) {
+    
+    VGfloat x,y,a,b,r1,r2;
+    x = luaL_checknumber(L, 1);
+    y = luaL_checknumber(L, 2);
+    a = luaL_checknumber(L, 3);
+    b = luaL_checknumber(L, 4);
+    r1 = r2 = luaL_checknumber(L, 5);
+    if (lua_gettop(L)==6)
+        r2 = luaL_checknumber(L, 6);
+    
+    int index = findIndex();
+    switch (mode[RECT]) {
+        case P5_CORNER:
+            vguRoundRect(paths[index], x, y, a, b,r1,r2);
+            break;
+        case P5_CENTER:
+            vguRoundRect(paths[index], x-a/2, y-b/2, a, b,r1,r2);
+            break;
+        case P5_RADIUS:
+            vguRoundRect(paths[index], x-a/2, y-b/2, a/2, b/2,r1,r2);
+            break;
+        case P5_CORNERS:
+            vguRoundRect(paths[index], x, y, x+a, y+b,r1,r2);
+            break;
+    }
+    
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
+    return 0;
+}
 
+static int P5_Rect(lua_State *L) {
+  if (lua_gettop(L)==5)
+    return _RoundRect(L);
+    
   VGfloat a = luaL_checknumber(L, 1);
   VGfloat b = luaL_checknumber(L, 2);
   VGfloat c = luaL_checknumber(L, 3);
@@ -325,7 +436,7 @@ static int P5_Rect(lua_State *L) {
       break;
   }
   
-  int index = findPath(style.data);
+  int index = findIndex();
   vguRect(paths[index],a,b,c,d);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
@@ -356,7 +467,7 @@ static int P5_Ellipse(lua_State *L) {
       break;
   }
     
-  int index = findPath(style.data);
+  int index = findIndex();
   vguEllipse(paths[index],a,b,c,d);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
@@ -370,11 +481,58 @@ static int P5_Line(lua_State *L) {
   VGfloat c = luaL_checknumber(L, 3);
   VGfloat d = luaL_checknumber(L, 4);
     
-  int index = findPath(style.data);
+  int index = findIndex();
   vguLine(paths[index],a,b,c,d);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
   return 0;
+}
+
+static int P5_Point(lua_State *L) {
+  VGfloat x = luaL_checknumber(L, 1);
+  VGfloat y = luaL_checknumber(L, 2);
+    
+  int index = findIndex();
+  vguEllipse(paths[index],x-2,y-2,4,4);
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+    flushPathByIndex(index);
+}
+
+static int P5_Quad(lua_State *L) {
+  const VGfloat coords[8] = {
+        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
+        luaL_checknumber(L, 5),luaL_checknumber(L, 6),
+        luaL_checknumber(L, 7),luaL_checknumber(L, 8)
+  };
+  int index = findIndex();
+  vguPolygon(paths[index],coords,8,true);
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+    flushPathByIndex(index);
+}
+
+static int P5_Triangle(lua_State *L) {
+  const VGfloat coords[8] = {
+        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
+        luaL_checknumber(L, 5),luaL_checknumber(L, 6)
+  };
+  int index = findIndex();
+  vguPolygon(paths[index],coords,6,true);
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+    flushPathByIndex(index);
+}
+
+static int P5_Square(lua_State *L) {
+    const VGfloat coords[8] = {
+        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
+        luaL_checknumber(L, 5),luaL_checknumber(L, 6)
+    };
+    int index = findIndex();
+    vguPolygon(paths[index],coords,6,true);
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
 }
 
 static void flushBuffers() {
@@ -388,37 +546,38 @@ static int P5_Flush(lua_State *L) {
 }
 
 static int P5_StrokeCap(lua_State *L) {
+  props.attr[STROKE_CAP] = luaL_checkint(L, 1);
   return 0;
 }
 
 static int P5_StrokeJoin(lua_State *L) {
+  props.attr[STROKE_JOIN] = luaL_checkint(L, 1);
   return 0;
 }
 
 static int P5_StrokeWeight(lua_State *L) {
-  return 0;
+  props.attr[STROKE_WEIGHT] = luaL_checkint(L, 1);
 }
 
-static int32_t Color(lua_State *L) {
-  int r,g,b,a;
-  int32_t v;
+static VGuint Color(lua_State *L) {
+  VGuint r,g,b,a;
   if (lua_gettop(L)==1) {
-	r = g = b = luaL_checknumber(L, 1);
-    if (r > 255) { v= r; return v;}
-	a = 255;
+    r = g = b = luaL_checkint(L, 1);
+    if (r>255) return r;
+    a = 255;
   } else if (lua_gettop(L)==2) {
-	r = g = b = luaL_checknumber(L, 1);
-	a = luaL_checknumber(L, 2);
+	r = g = b = luaL_checkint(L, 1);
+	a = luaL_checkint(L, 2);
   } else if (lua_gettop(L)==3) {
-	r = luaL_checknumber(L, 1);
-	g = luaL_checknumber(L, 2);
-	b = luaL_checknumber(L, 3);
+	r = luaL_checkint(L, 1);
+	g = luaL_checkint(L, 2);
+	b = luaL_checkint(L, 3);
 	a = 255;
   } else if (lua_gettop(L)==4) {
-	r = luaL_checknumber(L, 1);
-	g = luaL_checknumber(L, 2);
-	b = luaL_checknumber(L, 3);
-	a = luaL_checknumber(L, 4);
+	r = luaL_checkint(L, 1);
+	g = luaL_checkint(L, 2);
+	b = luaL_checkint(L, 3);
+	a = luaL_checkint(L, 4);
   }
   return ((r & 0xff) << 24) + ((g & 0xff) << 16) + 
 		((b & 0xff) << 8) + (a & 0xff);
@@ -453,12 +612,6 @@ static int P5_NoStroke(lua_State *L) {
   return 0;
 }
 
-static int P5_Color(lua_State *L) {
-  int c = Color(L);
-  lua_pushnumber(L,c);
-  return 1;
-}
-
 static int P5_RectMode(lua_State *L) {
   mode[RECT] = luaL_checkint(L, 1);
   return 0;
@@ -475,7 +628,7 @@ static int P5_ImageMode(lua_State *L) {
 }
 
 static int P5_ShapeMode(lua_State *L) {
-  mode[SHAPE] =luaL_checkint(L, 1);
+  mode[SHAPE] = luaL_checkint(L, 1);
   return 0;
 }
 
@@ -490,6 +643,11 @@ static int P5_Smooth(lua_State *L) {
 
 static int P5_IsKeyPressed(lua_State *L) {
   lua_pushboolean(L,isEvent[KEY_PRESSED]);
+  return 1;
+}
+
+static int P5_Color(lua_State *L) {
+  lua_pushnumber(L,Color(L));
   return 1;
 }
 
@@ -609,7 +767,7 @@ void vg_init(int w,int h) {
     style.data = 0;
     
 	for (int i=0; i<PATH_SIZE; i++) {
-	  paths[i] = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,MAX_SEGMENTS,4,VG_PATH_CAPABILITY_APPEND_TO);
+	  paths[i] = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,MAX_SEGMENTS,6,VG_PATH_CAPABILITY_APPEND_TO);
 	  pathStyle[i].data = 0;
 	}
     
@@ -635,6 +793,7 @@ void vg_call(char *fn_name) {
 
 	if ((error = lua_pcall(L, 0, 0, 0)))			
 		bail(L, error, "Error running script\n");
+    frameCount++;
 }
 
 void vg_resize(int w, int h) {
@@ -867,6 +1026,9 @@ int luaRegisterAPI(int argc, const char * argv[]) {
 	lua_pushcfunction(L,P5_Background);
 	lua_setglobal(L,"background");
 
+    lua_pushcfunction(L,P5_Color);
+    lua_setglobal(L,"color");
+    
 	lua_pushcfunction(L,P5_Fill);
 	lua_setglobal(L,"fill");
 
@@ -878,9 +1040,6 @@ int luaRegisterAPI(int argc, const char * argv[]) {
 	
 	lua_pushcfunction(L,P5_NoStroke);
 	lua_setglobal(L,"noStroke");
-
-	lua_pushcfunction(L,P5_Color);
-	lua_setglobal(L,"color");
     
     lua_pushcfunction(L,P5_RectMode);
     lua_setglobal(L,"rectMode");
