@@ -4,7 +4,7 @@
 --
 -- Döiköl Interactive Graphics Environment
 --
--- Copyright (c) 2017-2019 Armando Arce - armando.arce@gmail.com
+-- Copyright (c) 2017-2020 Armando Arce - armando.arce@gmail.com
 --
 -- This library is free software; you can redistribute it and/or modify
 -- it under the terms of the MIT license. See LICENSE for details.
@@ -240,11 +240,20 @@ static void getArrColor(VGfloat* arr, VGuint color) {
 // exit()
 // loop()
 // noLoop()
-// popStyle() -- todo
-// pushStyle() -- todo
 // redraw()
 // setTitle() -- todo
 // time() -- Diököl extension
+
+typedef struct Context {
+    VGuint strokeColor;
+    VGuint fillColor;
+    int strokeWeight;
+    int strokeCap;
+    int strokeJoin;
+    struct Context *next;
+} Context;
+
+struct Context *ctx = NULL;
 
 static int P5_Exit(lua_State *L) {
     done = true;
@@ -258,6 +267,33 @@ static int P5_Loop(lua_State *L) {
 
 static int P5_NoLoop(lua_State *L) {
     loop = false;
+    return 0;
+}
+
+static int P5_PopStyle(lua_State *L) {
+    Context* temp = ctx;
+    ctx = ctx->next;
+    style.attr[FILL_COLOR] = ctx->fillColor;
+    style.attr[STROKE_COLOR] = ctx->strokeColor;
+    props.attr[STROKE_WEIGHT] = ctx->strokeWeight;
+    props.attr[STROKE_CAP] = ctx->strokeCap;
+    props.attr[STROKE_JOIN] = ctx->strokeJoin;
+    free(temp);
+    return 0;
+}
+
+static int P5_PushStyle(lua_State *L) {
+    Context* tmp;
+    tmp = malloc(sizeof(Context));
+    memset(tmp,0,sizeof(Context));
+    
+    tmp->fillColor = style.attr[FILL_COLOR];
+    tmp->strokeColor = style.attr[STROKE_COLOR];
+    tmp->strokeWeight = props.attr[STROKE_WEIGHT];
+    tmp->strokeCap = props.attr[STROKE_CAP];
+    tmp->strokeJoin = props.attr[STROKE_JOIN];
+    tmp->next = ctx;
+    ctx = tmp;
     return 0;
 }
 
@@ -281,6 +317,7 @@ static int P5_Time(lua_State *L) {
 // frameRate()
 // fullScreen() -- todo
 // height()
+// noSmooth()
 // size()
 // width()
 
@@ -294,9 +331,18 @@ static int P5_FrameRate(lua_State *L) {
     return 0;
 }
 
+static int P5_FullScreen(lua_State *L) {
+    return 0;
+}
+
 static int P5_Height(lua_State *L) {
     lua_pushnumber(L, height);
     return 1;
+}
+
+static int P5_NoSmooth(lua_State *L) {
+    glDisable(GL_MULTISAMPLE);
+    return 0;
 }
 
 static int P5_Size(lua_State *L) {
@@ -667,9 +713,9 @@ static int P5_EndShape(lua_State *L) {
         VGfloat data = 0.0f;
         vgAppendPathData(shape_path, 1, &seg, &data);
     }
-    if (seg==VG_CLOSE_PATH) _FillPath(shape_path);
-    _StrokePath(shape_path);
-    _EventPath(shape_path);
+    if (seg==VG_CLOSE_PATH) {}
+    
+    ///// to-do
 }
 
 static int P5_QuadraticVertex(lua_State *L) {
@@ -1062,6 +1108,664 @@ static int P5_Stroke(lua_State *L) {
     return 0;
 }
 
+// Color Creating & Reading commands:
+// alpha()
+// blue()
+// brightness() -- todo
+// color()
+// green()
+// hue() -- todo
+// lerpColor()
+// red()
+// saturation() -- todo
+
+static int P5_Alpha(lua_State *L) {
+    VGuint hexValue = luaL_checkint(L, 1);
+    VGubyte a = ((hexValue) & 0xFF);
+    lua_pushnumber(L,a);
+    return 1;
+}
+
+static int P5_Blue(lua_State *L) {
+    VGuint hexValue = luaL_checkint(L, 1);
+    VGubyte b = ((hexValue >> 8) & 0xFF);
+    lua_pushnumber(L,b);
+    return 1;
+}
+
+static int P5_Color(lua_State *L) {
+    lua_pushnumber(L,Color(L));
+    return 1;
+}
+
+static int P5_Green(lua_State *L) {
+    VGuint hexValue = luaL_checkint(L, 1);
+    VGubyte g = ((hexValue >> 16) & 0xFF);
+    lua_pushnumber(L,g);
+    return 1;
+}
+
+static int P5_LerpColor(lua_State *L) {
+    VGuint ca = luaL_checkint(L, 1);
+    VGuint cb = luaL_checkint(L, 2);
+    float t = luaL_checknumber(L, 3);
+    
+    VGubyte ar = ((ca >> 24) & 0xFF);
+    VGubyte ag = ((ca >> 16) & 0xFF);
+    VGubyte ab = ((ca >> 8) & 0xFF);
+    VGubyte aa = ((ca) & 0xFF);
+    
+    VGubyte br = ((cb >> 24) & 0xFF);
+    VGubyte bg = ((cb >> 16) & 0xFF);
+    VGubyte bb = ((cb >> 8) & 0xFF);
+    VGubyte ba = ((cb) & 0xFF);
+    
+    VGubyte r = ar + (br - ar) * t;
+    VGubyte g = ag + (bg - ag) * t;
+    VGubyte b = ab + (bb - ab) * t;
+    VGubyte a = aa + (ba - aa) * t;
+    
+    int c = ((r & 0xff) << 24) +
+    ((g & 0xff) << 16) +
+    ((b & 0xff) << 8) +
+    (a & 0xff);
+    lua_pushnumber(L,c);
+    return 1;
+}
+
+static int P5_Red(lua_State *L) {
+    VGuint hexValue = luaL_checkint(L, 1);
+    VGubyte r = ((hexValue >> 24) & 0xFF);
+    lua_pushnumber(L,r);
+    return 1;
+}
+
+// Image commands:
+// createImage()
+
+static int P5_CreateImage(lua_State *L) {
+    VGint width = luaL_checknumber(L, 1);
+    VGint height = luaL_checknumber(L, 2);
+    imageCount++;
+    unsigned int lilEndianTest = 1;
+    VGImageFormat rgbaFormat;
+    if (((unsigned char*)&lilEndianTest)[0] == 1)
+        rgbaFormat = VG_sABGR_8888;
+    else rgbaFormat = VG_sRGBA_8888;
+    iWidth[imageCount] = width;
+    iHeight[imageCount] = height;
+    images[imageCount] = vgCreateImage(rgbaFormat,width,height,VG_IMAGE_QUALITY_BETTER);
+    lua_pushnumber(L,imageCount);
+    return 1;
+}
+
+
+// Image Loading & Displaying commands:
+// imageWidth() -- Diököl extension
+// imageHeight() -- Diököl extension
+// image()
+// imageMode()
+// loadImage()
+// noTint()
+// requestImage()
+// tint()
+
+static int P5_ImageWidth(lua_State *L) {
+    lua_pushnumber(L,iWidth[(int)luaL_checknumber(L, 1)]);
+    return 1;
+}
+
+static int P5_ImageHeight(lua_State *L) {
+    lua_pushnumber(L,iHeight[(int)luaL_checknumber(L, 1)]);
+    return 1;
+}
+
+static int P5_Image(lua_State *L) {
+    VGfloat matrix[9];
+    VGPaint fill;
+    int imageId = luaL_checknumber(L, 1);
+    float w = iWidth[imageId];
+    float h = iHeight[imageId];
+    float x = luaL_checknumber(L,2);
+    float y = luaL_checknumber(L,3);
+    if (lua_gettop(L) == 5) {
+        w = luaL_checknumber(L,4);
+        h = luaL_checknumber(L,5);
+    }
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgGetMatrix(matrix);
+    switch (mode[IMAGE]) {
+        case P5_CENTER:
+            x = x - w/2;
+            y = y - h/2;
+            break;
+        case P5_CORNERS:
+            w = abs(w - x);
+            h = abs(h - y);
+            break;
+    }
+    float sx = w/iWidth[imageId];
+    float sy = h/iHeight[imageId];
+    vgTranslate(x,y);
+    vgScale(sx,sy);
+    vgDrawImage(images[imageId]);
+    vgLoadMatrix(matrix);
+    return 0;
+}
+
+static int P5_ImageMode(lua_State *L) {
+    mode[IMAGE] = luaL_checkint(L, 1);
+    return 0;
+}
+
+VGImage _createImageFromMemory(unsigned char const *buffer, int len , int* w, int* h) {
+    VGImage img;
+    VGint width;
+    VGint height;
+    VGint dstride;
+    VGint n;
+    VGubyte *data;
+    int i,j;
+    
+    unsigned int lilEndianTest = 1;
+    VGImageFormat rgbaFormat;
+    if (((unsigned char*)&lilEndianTest)[0] == 1)
+        rgbaFormat = VG_sABGR_8888;
+    else rgbaFormat = VG_sRGBA_8888;
+    
+    data = stbi_load_from_memory(buffer, len, &width, &height, &n, STBI_rgb_alpha);
+    dstride = width * 4;
+    
+    if (data == NULL) {
+        printf("Failed creating image!\n");
+        return VG_INVALID_HANDLE;
+    }
+    
+    *w = width;
+    *h = height;
+    img = vgCreateImage(rgbaFormat, width, height, VG_IMAGE_QUALITY_BETTER);
+    vgImageSubData(img, data, dstride, rgbaFormat, 0, 0, width, height);
+    stbi_image_free(data);
+    return img;
+}
+
+VGImage _createImageFromFile(const char *filename, int* w, int* h) {
+    VGImage img;
+    VGint width;
+    VGint height;
+    VGint dstride;
+    VGint n;
+    VGubyte *data;
+    int i,j;
+    
+    unsigned int lilEndianTest = 1;
+    VGImageFormat rgbaFormat;
+    if (((unsigned char*)&lilEndianTest)[0] == 1)
+        rgbaFormat = VG_sABGR_8888;
+    else rgbaFormat = VG_sRGBA_8888;
+    
+    char filepath[256];
+    strcpy(filepath,shape_path);
+    
+    data = stbi_load(strcat(filepath,filename), &width, &height, &n, STBI_rgb_alpha);
+    dstride = width * 4;
+    
+    if (data == NULL) {
+        printf("Failed opening '%s' for reading!\n", filepath);
+        return VG_INVALID_HANDLE;
+    }
+    
+    *w = width;
+    *h = height;
+    img = vgCreateImage(rgbaFormat, width, height, VG_IMAGE_QUALITY_BETTER);
+    vgImageSubData(img, data, dstride, rgbaFormat, 0, 0, width, height);
+    stbi_image_free(data);
+    return img;
+}
+
+static int P5_ImportImage(lua_State *L) {
+    const char *buffer = luaL_checkstring(L, 1);
+    int len = luaL_checknumber(L, 2);
+    imageCount++;
+    images[imageCount]=_createImageFromMemory(buffer,len,&iWidth[imageCount],
+                                              &iHeight[imageCount]);
+    lua_pushnumber(L,imageCount);
+    return 1;
+}
+
+static int P5_LoadImage(lua_State *L) {
+    char filename[256];
+    strcpy(filename,luaL_checkstring(L, 1));
+    imageCount++;
+    images[imageCount]=_createImageFromFile(filename,&iWidth[imageCount],
+                                            &iHeight[imageCount]);
+    lua_pushnumber(L,imageCount);
+    return 1;
+}
+
+// Image Pixels commands:
+// blend()
+// copy()
+// filter()
+// get()
+// loadPixels()
+// pixels[]
+// set()
+// updatePixels()
+// pixelsLength() -- Diököl extension
+
+static int array_index (lua_State* L) {
+    VGubyte** parray = luaL_checkudata(L, 1, "array");
+    int index = luaL_checkint(L, 2);
+    VGubyte r = (*parray)[index*4];
+    VGubyte g = (*parray)[index*4+1];
+    VGubyte b = (*parray)[index*4+2];
+    VGubyte a = (*parray)[index*4+3];
+    VGuint c = ((r & 0xFF) << 24) + ((g & 0xFF) << 16) +
+    ((b & 0xFF) << 8) + (a & 0xFF);
+    lua_pushnumber(L,c);
+    return 1;
+}
+
+static int array_newindex (lua_State* L) {
+    VGubyte** parray = luaL_checkudata(L, 1, "array");
+    int index = luaL_checkint(L, 2);
+    int hexValue = luaL_checkint(L, 3);
+    VGubyte r = ((hexValue >> 24) & 0xFF);
+    VGubyte g = ((hexValue >> 16) & 0xFF);
+    VGubyte b = ((hexValue >> 8) & 0xFF);
+    VGubyte a = ((hexValue) & 0xFF);
+    (*parray)[index*4] = r;
+    (*parray)[index*4+1] = g;
+    (*parray)[index*4+2] = b;
+    (*parray)[index*4+3] = a;
+    return 0;
+}
+
+static int P5_PixelsLength (lua_State* L) {
+    VGubyte** parray = luaL_checkudata(L, 1, "array");
+    VGubyte r = (*parray)[0];
+    VGubyte g = (*parray)[1];
+    VGubyte b = (*parray)[2];
+    VGubyte a = (*parray)[3];
+    VGuint c = ((r & 0xFF) << 24) + ((g & 0xFF) << 16) +
+    ((b & 0xFF) << 8) + (a & 0xFF);
+    lua_pushnumber(L, c);
+    return 1;
+}
+
+static int P5_LoadPixels(lua_State *L) {
+    int imageId = luaL_checknumber(L, 1);
+    VGImage image = images[imageId];
+    int width = iWidth[imageId], height = iHeight[imageId];
+    VGuint n = width*height;
+    VGubyte** parray = lua_newuserdata(L,sizeof(VGubyte**));
+    *parray = malloc(sizeof(VGubyte)*n*4+4);
+    
+    unsigned int lilEndianTest = 1;
+    VGImageFormat rgbaFormat;
+    if (((unsigned char*)&lilEndianTest)[0] == 1)
+        rgbaFormat = VG_sABGR_8888;
+    else rgbaFormat = VG_sRGBA_8888;
+    vgGetImageSubData(image, *parray+4,width*4,rgbaFormat,0,0,width,height);
+    (*parray)[0] = ((n >> 24) & 0xFF);
+    (*parray)[1] = ((n >> 16) & 0xFF);
+    (*parray)[2] = ((n >> 8) & 0xFF);
+    (*parray)[3] = ((n) & 0xFF);
+    luaL_getmetatable(L, "array"); // 1024
+    lua_setmetatable(L, -2);
+    return 1;
+}
+
+static int P5_UpdatePixels(lua_State *L) {
+    int imageId = luaL_checknumber(L, 1);
+    VGubyte** parray = luaL_checkudata(L, 2, "array");
+    VGImage image = images[imageId];
+    int width = iWidth[imageId], height = iHeight[imageId];
+    
+    unsigned int lilEndianTest = 1;
+    VGImageFormat rgbaFormat;
+    if (((unsigned char*)&lilEndianTest)[0] == 1)
+        rgbaFormat = VG_sABGR_8888;
+    else rgbaFormat = VG_sRGBA_8888;
+    vgImageSubData(image,*parray+4,width*4,rgbaFormat,0,0,width,height);
+    return 0;
+}
+
+// Rendering commands:
+// clip()
+// noClip()
+
+static int P5_Clip(lua_State *L) {
+    vgSetiv(VG_SCISSORING, VG_TRUE, 0);
+    VGint coords[4] = {
+        luaL_checknumber(L, 1), luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3), luaL_checknumber(L, 4),
+    };
+    vgSetiv(VG_SCISSOR_RECTS, 4, coords);
+    return 0;
+}
+
+static int P5_NoClip(lua_State *L) {
+    vgSetiv(VG_SCISSORING, VG_FALSE, 0);
+    return 0;
+}
+
+// Typography Loading & Displaying commands:
+// createFont()
+// loadFont()
+// text()
+// textFont()
+
+int fontId = 0;
+char ttf_buffer[1<<24];
+int alignX;
+int alignY;
+int textLeading;
+
+VGFont _createFontFromFile(const char *filename, unsigned short size) {
+    
+    stbtt_fontinfo font;
+    stbtt_vertex* vertices;
+    float xpos=2;
+    int i,advance,lsb,w,h,xoff=0,yoff=0;
+    int x0,y0,x1,y1;
+    int glyphIndex;
+    int num_verts;
+    
+    char filepath[256];
+    strcpy(filepath,shape_path);
+    fread(ttf_buffer, 1, 1<<24, fopen(strcat(filepath,filename), "rb"));
+    
+    VGPath path;
+    VGubyte seg;
+    stbtt_InitFont(&font,ttf_buffer,stbtt_GetFontOffsetForIndex(ttf_buffer,0));
+    stbtt_GetFontBoundingBox(&font,&x0,&y0,&x1,&y1);
+    
+    float scale = 10.0/(y1-y0);
+    
+    VGFont fnt = vgCreateFont(font.numGlyphs);
+    for (glyphIndex=0;glyphIndex<font.numGlyphs;glyphIndex++) {
+        stbtt_GetCodepointHMetrics(&font,(unsigned char)glyphIndex,&advance,&lsb);
+        num_verts = stbtt_GetCodepointShape(&font,(unsigned char)glyphIndex,&vertices);
+        path = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,num_verts,4,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_PATH_TRANSFORMED_BOUNDS);
+        for (i=0; i < num_verts; ++i) {
+            switch (vertices[i].type) {
+                case STBTT_vmove:
+                    seg = VG_MOVE_TO;
+                    vgAppendPathData(path,1,&seg,
+                                     (VGfloat[]){vertices[i].x*scale,vertices[i].y*scale});
+                    break;
+                case STBTT_vline:
+                    seg = VG_LINE_TO;
+                    vgAppendPathData(path,1,&seg,
+                                     (VGfloat[]){vertices[i].x*scale,vertices[i].y*scale});
+                    break;
+                case STBTT_vcurve:
+                    seg = VG_QUAD_TO;
+                    vgAppendPathData(path,1,&seg,
+                                     (VGfloat[]){vertices[i].cx*scale,vertices[i].cy*scale,
+                                         vertices[i].x*scale,vertices[i].y*scale});
+                    break;
+                case STBTT_vcubic:
+                    seg = VG_CUBIC_TO;
+                    vgAppendPathData(path,1,&seg,
+                                     (VGfloat[]){vertices[i].cx*scale,vertices[i].cy*scale,
+                                         vertices[i].cx1*scale,vertices[i].cy1*scale,
+                                         vertices[i].x*scale,vertices[i].y*scale});
+                    break;
+            }
+        }
+        seg = VG_CLOSE_PATH;
+        vgAppendPathData(path,1,&seg,(VGfloat[]){0.0});
+        vgSetGlyphToPath(fnt,glyphIndex,path,VG_FALSE,(VGfloat[]){xoff*scale,yoff*scale},(VGfloat[]){advance*scale,0});
+    }
+    return fnt;
+}
+
+static int P5_CreateFont(lua_State *L) {
+    char filename[256];
+    strcpy(filename,luaL_checkstring(L, 1));
+    int textHeight = luaL_checknumber(L, 2);
+    fontCount++;
+    fonts[fontCount]=_createFontFromFile(filename,textHeight);
+    fHeight[fontCount] = fSize[fontCount] = textHeight;
+    lua_pushnumber(L,fontCount);
+    return 1;
+}
+
+VGFont _loadFontFromFile(const char *filename, unsigned short size) {
+    
+    stbtt_fontinfo font;
+    VGubyte *bitmap;
+    float scale, xpos=2;
+    int i,advance,lsb,w,h,xoff,yoff;
+    int x0,y0,x1,y1;
+    int glyphIndex;
+    
+    char filepath[256];
+    strcpy(filepath,shape_path);
+    fread(ttf_buffer, 1, 1<<24, fopen(strcat(filepath,filename), "rb"));
+    
+    VGImage image;
+    VGImageFormat bitmapFormat = VG_sL_8;
+    unsigned int lilEndianTest = 1;
+    VGImageFormat rgbaFormat;
+    
+    if (((unsigned char*)&lilEndianTest)[0] == 1)
+        rgbaFormat = VG_sABGR_8888;
+    else rgbaFormat = VG_sRGBA_8888;
+    
+    stbtt_InitFont(&font,ttf_buffer,stbtt_GetFontOffsetForIndex(ttf_buffer,0));
+    VGFont fnt = vgCreateFont(font.numGlyphs);
+    scale = stbtt_ScaleForPixelHeight(&font, size);
+    for (glyphIndex=0;glyphIndex<font.numGlyphs;glyphIndex++) {
+        stbtt_GetCodepointHMetrics(&font,(unsigned char)glyphIndex,&advance,&lsb);
+        bitmap = stbtt_GetCodepointBitmap(&font,scale,scale,
+                                          (unsigned char)glyphIndex, &w, &h, &xoff,&yoff);
+        for (i=0; i< w*h; i++) bitmap[i]= 0xFF-bitmap[i];
+        image = vgCreateImage(rgbaFormat,w,h,VG_IMAGE_QUALITY_NONANTIALIASED);
+        vgImageSubData(image,bitmap,w,bitmapFormat,0,0,w,h);
+        vgSetGlyphToImage(fnt,glyphIndex,image,(VGfloat[]){xoff,yoff},
+                          (VGfloat[]){(int)(advance*scale),0});
+    }
+    return fnt;
+}
+
+static int P5_LoadFont(lua_State *L) {
+    char filename[256];
+    strcpy(filename,luaL_checkstring(L, 1));
+    int textHeight = luaL_checknumber(L, 2);
+    fontCount++;
+    fonts[fontCount]=_loadFontFromFile(filename,textHeight);
+    fHeight[fontCount] = fSize[fontCount] = textHeight;
+    lua_pushnumber(L,fontCount);
+    return 1;
+}
+
+static int P5_Text(lua_State *L) {
+    char str[256];
+    strcpy(str,luaL_checkstring(L, 1));
+    float x = luaL_checknumber(L, 2);
+    float y = luaL_checknumber(L, 3);
+    VG_GLYPH_ORIGIN[0] = 0;
+    VG_GLYPH_ORIGIN[1] = 0;
+    int i;
+    for (i=0;i<strlen(str);i++)
+        vgDrawGlyph(fonts[fontId],str[i],0,false);
+    int tWidth = VG_GLYPH_ORIGIN[0];
+    switch (alignX) {
+        case P5_LEFT:
+            break;
+        case P5_RIGHT:
+            x = x - tWidth;
+            break;
+        case P5_CENTER:
+            x = x - tWidth/2;
+            break;
+    }
+    VG_GLYPH_ORIGIN[0] = 0;
+    VG_GLYPH_ORIGIN[1] = 0;
+    VGfloat matrix[9];
+    vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(matrix);
+    vgTranslate(x,y);
+    vgScale(fSize[fontId]/10.0f,-fSize[fontId]/10.0f);
+    
+    for (i=0;i<strlen(str);i++) {
+        vgDrawGlyph(fonts[fontId],str[i],VG_FILL_PATH,false);
+    }
+    //    for (i=0;i<strlen(str);i++)
+    //        vgDrawGlyph(fonts[fontId],str[i],VG_STROKE_PATH,false);
+    vgLoadMatrix(matrix);
+    return 0;
+}
+
+static int P5_TextFont(lua_State *L) {
+    fontId = luaL_checkint(L, 1);
+    return 0;
+}
+
+// Typography Attributes commands
+// textAlign()
+// textLeading()
+// textSize()
+// textWidth()
+
+static int P5_TextAlign(lua_State *L) {
+    alignX = luaL_checkint(L, 1);
+    if (lua_gettop(L) == 2)
+        alignY = luaL_checkint(L, 2);
+    return 0;
+}
+
+static int P5_TextLeading(lua_State *L) {
+    textLeading = luaL_checkint(L, 1);
+    return 0;
+}
+
+static int P5_TextSize(lua_State *L) {
+    fHeight[fontId] = fSize[fontId] = luaL_checknumber(L, 1);
+    return 0;
+}
+
+static int P5_TextWidth(lua_State *L) {
+    int width = 0;
+    char str[256];
+    strcpy(str,luaL_checkstring(L, 1));
+    VG_GLYPH_ORIGIN[0] = 0;
+    VG_GLYPH_ORIGIN[1] = 0;
+    int i;
+    for (i=0;i<strlen(str);i++)
+        vgDrawGlyph(fonts[fontId],str[i],0,false);
+    lua_pushnumber(L,VG_GLYPH_ORIGIN[0]);
+    return 1;
+}
+
+// Calculation functions:
+// constrain()
+// dist()
+// lerp()
+// mag()
+// map()
+// norm()
+
+static int P5_Constrain(lua_State *L) {
+    float amt,low,high,value;
+    amt = luaL_checknumber(L, 1);
+    low = luaL_checknumber(L, 2);
+    high = luaL_checknumber(L, 3);
+    if (amt < low)
+        value = low;
+    else if (amt > high)
+        value = high;
+    else
+        value = amt;
+    lua_pushnumber(L,value);
+    return 1;
+}
+
+static int P5_Dist(lua_State *L) {
+    float x1,y1,x2,y2;
+    x1 = luaL_checknumber(L, 1);
+    y1 = luaL_checknumber(L, 2);
+    x2 = luaL_checknumber(L, 3);
+    y2 = luaL_checknumber(L, 4);
+#ifdef __linux__
+    float d = STBTT_sqrt(STBTT_pow(x2-x1,2)+STBTT_pow(y2-y1,2));
+#else
+    float d = sqrt(pow(x2-x1,2)+pow(y2-y1,2));
+#endif
+    lua_pushnumber(L,d);
+    return 1;
+}
+
+static int P5_Lerp(lua_State *L) {
+    float a,b,f;
+    a = luaL_checknumber(L, 1);
+    b = luaL_checknumber(L, 2);
+    f = luaL_checknumber(L, 3);
+    float l = a + f * (b - a);
+    lua_pushnumber(L,l);
+    return 1;
+}
+
+static int P5_Mag(lua_State *L) {
+    float x,y;
+    x = luaL_checknumber(L, 1);
+    y = luaL_checknumber(L, 2);
+#ifdef __linux__
+    float d = STBTT_sqrt(STBTT_pow(x,2)+STBTT_pow(y,2));
+#else
+    float d = sqrt(pow(x,2)+pow(y,2));
+#endif
+    lua_pushnumber(L,d);
+    return 1;
+}
+
+static int P5_Map(lua_State *L) {
+    float value,start1,stop1,start2,stop2;
+    value = luaL_checknumber(L, 1);
+    start1 = luaL_checknumber(L, 2);
+    stop1 = luaL_checknumber(L, 3);
+    start2 = luaL_checknumber(L, 4);
+    stop2 = luaL_checknumber(L, 5);
+    float outgoing =
+    start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
+    lua_pushnumber(L, outgoing);
+    return 1;
+}
+
+static int P5_Norm(lua_State *L) {
+    float value,start1,stop1;
+    value = luaL_checknumber(L, 1);
+    start1 = luaL_checknumber(L, 2);
+    stop1 = luaL_checknumber(L, 3);
+    float outgoing = ((value - start1) / (stop1 - start1));
+    lua_pushnumber(L, outgoing);
+    return 1;
+}
+
+// Trigonometry functions:
+// degrees()
+// radians()
+
+static int P5_Degrees(lua_State *L) {
+    float radians,degrees;
+    radians = luaL_checknumber(L, 1);
+    degrees = _deg(radians);
+    lua_pushnumber(L, degrees);
+    return 1;
+}
+
+static int P5_Radians(lua_State *L) {
+    float radians,degrees;
+    degrees = luaL_checknumber(L, 1);
+    radians = _rad(degrees);
+    lua_pushnumber(L, radians);
+    return 1;
+}
+
 static void flushBuffers() {
   for (int i=0; i<PATH_SIZE; i++)
     flushPathByIndex(i);
@@ -1072,11 +1776,6 @@ static int P5_Flush(lua_State *L) {
   return 0;
 }
 
-static int P5_ImageMode(lua_State *L) {
-  mode[IMAGE] = luaL_checkint(L, 1);
-  return 0;
-}
-
 static int P5_TextMode(lua_State *L) {
   mode[TEXT] = luaL_checkint(L, 1);
   return 0;
@@ -1084,11 +1783,6 @@ static int P5_TextMode(lua_State *L) {
 
 static int P5_Smooth(lua_State *L) {
   return 0;
-}
-
-static int P5_Color(lua_State *L) {
-  lua_pushnumber(L,Color(L));
-  return 1;
 }
 
 // OpenVG functions
@@ -1172,6 +1866,16 @@ int drawScene() {
     _resetEvents();
 }
 
+static void create_array_type(lua_State* L) {
+    static const struct luaL_reg array[] = {
+        { "__index",  array_index  },
+        { "__newindex",  array_newindex  },
+        NULL, NULL
+    };
+    luaL_newmetatable(L, "array");
+    luaL_openlib(L, NULL, array, 0);
+}
+
 int luaRegisterAPI(int argc, const char * argv[]) {
     
     if (argc>=2)
@@ -1186,6 +1890,8 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     if (argc>=2)
       lua_setglobal(L,"args");
 	
+    create_array_type(L);
+    
     lua_pushnumber(L,P5_NONE);
     lua_setglobal(L,"NONE");
     
@@ -1317,102 +2023,108 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     
     lua_pushnumber(L,P5_DELETE);
     lua_setglobal(L,"DELETE");
-
-// functions
-
+    
+    // functions
+    
+    lua_pushcfunction(L,P5_Exit);
+    lua_setglobal(L,"exit");
+    
+    lua_pushcfunction(L,P5_Loop);
+    lua_setglobal(L,"loop");
+    
+    lua_pushcfunction(L,P5_NoLoop);
+    lua_setglobal(L,"noLoop");
+    
+    lua_pushcfunction(L,P5_PopStyle);
+    lua_setglobal(L,"popStyle");
+    
+    lua_pushcfunction(L,P5_PushStyle);
+    lua_setglobal(L,"pushStyle");
+    
+    lua_pushcfunction(L,P5_Redraw);
+    lua_setglobal(L,"redraw");
+    
+    lua_pushcfunction(L,P5_FrameCount);
+    lua_setglobal(L,"frameCount");
+    
     lua_pushcfunction(L,P5_FrameRate);
     lua_setglobal(L,"frameRate");
     
-    lua_pushcfunction(L,P5_Flush);
-	lua_setglobal(L,"flush");
-	
-	lua_pushcfunction(L,P5_Exit);
-	lua_setglobal(L,"exit");
-	
-	lua_pushcfunction(L,P5_Time);
-	lua_setglobal(L,"time");
-	  
-	lua_pushcfunction(L,P5_Size);
-	lua_setglobal(L,"size");
+    lua_pushcfunction(L,P5_FullScreen);
+    lua_setglobal(L,"fullScreen");
     
     lua_pushcfunction(L,P5_Height);
     lua_setglobal(L,"height");
     
+    lua_pushcfunction(L,P5_NoSmooth);
+    lua_setglobal(L,"noSmooth");
+    
+    lua_pushcfunction(L,P5_Size);
+    lua_setglobal(L,"size");
+    
+    lua_pushcfunction(L,P5_Smooth);
+    lua_setglobal(L,"smooth");
+    
     lua_pushcfunction(L,P5_Width);
     lua_setglobal(L,"width");
-	
+    
     lua_pushcfunction(L,P5_Arc);
     lua_setglobal(L,"arc");
     
     lua_pushcfunction(L,P5_Ellipse);
     lua_setglobal(L,"ellipse");
-  
-    lua_pushcfunction(L,P5_Circle);
-    lua_setglobal(L,"circle");
     
     lua_pushcfunction(L,P5_Line);
     lua_setglobal(L,"line");
     
+    lua_pushcfunction(L,P5_Point);
+    lua_setglobal(L,"point");
+    
+    lua_pushcfunction(L,P5_Quad);
+    lua_setglobal(L,"quad");
+    
     lua_pushcfunction(L,P5_Rect);
     lua_setglobal(L,"rect");
     
-    lua_pushcfunction(L,P5_StrokeCap);
-	lua_setglobal(L,"strokeCap");
- 
-	lua_pushcfunction(L,P5_StrokeJoin);
-	lua_setglobal(L,"strokeJoin");
-
-	lua_pushcfunction(L,P5_StrokeWeight);
-	lua_setglobal(L,"strokeWeight");
-	
-	lua_pushcfunction(L,P5_Background);
-	lua_setglobal(L,"background");
-
-    lua_pushcfunction(L,P5_Color);
-    lua_setglobal(L,"color");
-    
-	lua_pushcfunction(L,P5_Fill);
-	lua_setglobal(L,"fill");
-
-	lua_pushcfunction(L,P5_NoFill);
-	lua_setglobal(L,"noFill");
-
-	lua_pushcfunction(L,P5_Stroke);
-	lua_setglobal(L,"stroke");
-	
-	lua_pushcfunction(L,P5_NoStroke);
-	lua_setglobal(L,"noStroke");
-    
-    lua_pushcfunction(L,P5_RectMode);
-    lua_setglobal(L,"rectMode");
+    lua_pushcfunction(L,P5_Triangle);
+    lua_setglobal(L,"triangle");
     
     lua_pushcfunction(L,P5_EllipseMode);
     lua_setglobal(L,"ellipseMode");
     
-    lua_pushcfunction(L,P5_TextMode);
-    lua_setglobal(L,"textMode");
+    lua_pushcfunction(L,P5_RectMode);
+    lua_setglobal(L,"rectMode");
     
-    lua_pushcfunction(L,P5_ImageMode);
-    lua_setglobal(L,"imageMode");
+    lua_pushcfunction(L,P5_StrokeCap);
+    lua_setglobal(L,"strokeCap");
     
-    lua_pushcfunction(L,P5_ShapeMode);
-    lua_setglobal(L,"shapeMode");
-
-    lua_pushcfunction(L,P5_Smooth);
-    lua_setglobal(L,"smooth");
+    lua_pushcfunction(L,P5_StrokeJoin);
+    lua_setglobal(L,"strokeJoin");
     
-    lua_pushcfunction(L,P5_PopMatrix);
-    lua_setglobal(L,"popMatrix");
+    lua_pushcfunction(L,P5_StrokeWeight);
+    lua_setglobal(L,"strokeWeight");
     
-    lua_pushcfunction(L,P5_PrintMatrix);
-    lua_setglobal(L,"printMatrix");
+    lua_pushcfunction(L,P5_BeginShape);
+    lua_setglobal(L,"beginShape");
     
-    lua_pushcfunction(L,P5_PushMatrix);
-    lua_setglobal(L,"pushMatrix");
+    lua_pushcfunction(L,P5_BezierVertex);
+    lua_setglobal(L,"bezierVertex");
     
-    lua_pushcfunction(L,P5_ResetMatrix);
-    lua_setglobal(L,"resetMatrix");
-
+    lua_pushcfunction(L,P5_CurveVertex);
+    lua_setglobal(L,"curveVertex");
+    
+    lua_pushcfunction(L,P5_EndShape);
+    lua_setglobal(L,"endShape");
+    
+    lua_pushcfunction(L,P5_QuadraticVertex);
+    lua_setglobal(L,"quadraticVertex");
+    
+    lua_pushcfunction(L,P5_Vertex);
+    lua_setglobal(L,"vertex");
+    
+    lua_pushcfunction(L,P5_SaveShape);
+    lua_setglobal(L,"saveShape");
+    
     lua_pushcfunction(L,P5_MouseButton);
     lua_setglobal(L,"mouseButton");
     
@@ -1427,6 +2139,156 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     
     lua_pushcfunction(L,P5_KeyCode);
     lua_setglobal(L,"keyCode");
+    
+    lua_pushcfunction(L,P5_Shape);
+    lua_setglobal(L,"shape");
+    
+    lua_pushcfunction(L,P5_ShapeMode);
+    lua_setglobal(L,"shapeMode");
+    
+    lua_pushcfunction(L,P5_PopMatrix);
+    lua_setglobal(L,"popMatrix");
+    
+    lua_pushcfunction(L,P5_PrintMatrix);
+    lua_setglobal(L,"printMatrix");
+    
+    lua_pushcfunction(L,P5_PushMatrix);
+    lua_setglobal(L,"pushMatrix");
+    
+    lua_pushcfunction(L,P5_ResetMatrix);
+    lua_setglobal(L,"resetMatrix");
+    
+    lua_pushcfunction(L,P5_Rotate);
+    lua_setglobal(L,"rotate");
+    
+    lua_pushcfunction(L,P5_Scale);
+    lua_setglobal(L,"scale");
+    
+    lua_pushcfunction(L,P5_ShearX);
+    lua_setglobal(L,"shearX");
+    
+    lua_pushcfunction(L,P5_ShearY);
+    lua_setglobal(L,"shearY");
+    
+    lua_pushcfunction(L,P5_Translate);
+    lua_setglobal(L,"translate");
+    
+    lua_pushcfunction(L,P5_Background);
+    lua_setglobal(L,"background");
+    
+    lua_pushcfunction(L,P5_Fill);
+    lua_setglobal(L,"fill");
+    
+    lua_pushcfunction(L,P5_NoFill);
+    lua_setglobal(L,"noFill");
+    
+    lua_pushcfunction(L,P5_NoStroke);
+    lua_setglobal(L,"noStroke");
+    
+    lua_pushcfunction(L,P5_Stroke);
+    lua_setglobal(L,"stroke");
+    
+    lua_pushcfunction(L,P5_Alpha);
+    lua_setglobal(L,"alpha");
+    
+    lua_pushcfunction(L,P5_Blue);
+    lua_setglobal(L,"blue");
+    
+    lua_pushcfunction(L,P5_Color);
+    lua_setglobal(L,"color");
+    
+    lua_pushcfunction(L,P5_Green);
+    lua_setglobal(L,"green");
+    
+    lua_pushcfunction(L,P5_LerpColor);
+    lua_setglobal(L,"lerpColor");
+    
+    lua_pushcfunction(L,P5_Red);
+    lua_setglobal(L,"red");
+    
+    lua_pushcfunction(L,P5_CreateImage);
+    lua_setglobal(L,"createImage");
+    
+    lua_pushcfunction(L,P5_ImageWidth);
+    lua_setglobal(L,"imageWidth");
+    
+    lua_pushcfunction(L,P5_ImageHeight);
+    lua_setglobal(L,"imageHeight");
+    
+    lua_pushcfunction(L,P5_Image);
+    lua_setglobal(L,"image");
+    
+    lua_pushcfunction(L,P5_ImageMode);
+    lua_setglobal(L,"imageMode");
+    
+    lua_pushcfunction(L,P5_ImportImage);
+    lua_setglobal(L,"importImage");
+    
+    lua_pushcfunction(L,P5_LoadImage);
+    lua_setglobal(L,"loadImage");
+    
+    lua_pushcfunction(L,P5_LoadPixels);
+    lua_setglobal(L,"loadPixels");
+    
+    lua_pushcfunction(L,P5_UpdatePixels);
+    lua_setglobal(L,"updatePixels");
+    
+    lua_pushcfunction(L,P5_PixelsLength);
+    lua_setglobal(L,"pixelsLength");
+    
+    lua_pushcfunction(L,P5_Clip);
+    lua_setglobal(L,"clip");
+    
+    lua_pushcfunction(L,P5_NoClip);
+    lua_setglobal(L,"noClip");
+    
+    lua_pushcfunction(L,P5_CreateFont);
+    lua_setglobal(L,"createFont");
+    
+    lua_pushcfunction(L,P5_LoadFont);
+    lua_setglobal(L,"loadFont");
+    
+    lua_pushcfunction(L,P5_Text);
+    lua_setglobal(L,"text");
+    
+    lua_pushcfunction(L,P5_TextFont);
+    lua_setglobal(L,"textFont");
+    
+    lua_pushcfunction(L,P5_TextAlign);
+    lua_setglobal(L,"textAlign");
+    
+    lua_pushcfunction(L,P5_TextLeading);
+    lua_setglobal(L,"textLeading");
+    
+    lua_pushcfunction(L,P5_TextSize);
+    lua_setglobal(L,"textSize");
+    
+    lua_pushcfunction(L,P5_TextWidth);
+    lua_setglobal(L,"textWidth");
+    
+    lua_pushcfunction(L,P5_Constrain);
+    lua_setglobal(L,"constrain");
+    
+    lua_pushcfunction(L,P5_Dist);
+    lua_setglobal(L,"dist");
+    
+    lua_pushcfunction(L,P5_Lerp);
+    lua_setglobal(L,"lerp");
+    
+    lua_pushcfunction(L,P5_Mag);
+    lua_setglobal(L,"mag");
+    
+    lua_pushcfunction(L,P5_Map);
+    lua_setglobal(L,"map");
+    
+    lua_pushcfunction(L,P5_Norm);
+    lua_setglobal(L,"norm");
+    
+    lua_pushcfunction(L,P5_Degrees);
+    lua_setglobal(L,"degrees");
+    
+    lua_pushcfunction(L,P5_Radians);
+    lua_setglobal(L,"radians");
     
 	return 0;
 }
