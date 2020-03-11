@@ -133,7 +133,9 @@ int error;
 VGPaint strokePaint;
 VGPaint fillPaint;
 
+VGPath shape_path;
 VGPath paths[PATH_SIZE];
+VGPath shapePaths[255];
 
 int mode[5] = {P5_CENTER,P5_CORNER,0,0,0}; // [0] = ellipse, [1] = rect, [2] = image, [3] = shape, [4] = text
 //int style[5] = {0,0,1,0xFF00FF00,0xFF000000}; // [0] = strokeJoin, [1] = strokeCap, [2] = strokeWeight, [3] = strokeColor, [4] = fillColor
@@ -172,7 +174,20 @@ union PropsUnion pathProps[PATH_SIZE];
 
 VGfloat pathTransform[PATH_SIZE][9];
 
-VGfloat zeroMatrix[9] = {0};
+typedef struct Matrix {
+    VGfloat data[9];
+    struct Matrix *next;
+} Matrix;
+
+struct Matrix *mtrx_stack = NULL;
+
+Matrix *mtrx_new() {
+    Matrix *mtrx;
+    mtrx = malloc(sizeof(Matrix));
+    memset(mtrx,0,sizeof(Matrix));
+    mtrx->next = NULL;
+    return mtrx;
+}
 
 char *eventArray[] = {"mouseMoved","mouseDragged","mousePressed","mouseReleased","mouseClicked","keyPressed","keyReleased","windowResized"};
 
@@ -338,6 +353,17 @@ static int findIndex() {
   return next;
 }
 
+// 2D Primitives:
+// arc()
+// circle()
+// ellipse()
+// line ()
+// point()
+// quad()
+// rect()
+// square()
+// triangle
+
 static int P5_Arc(lua_State *L) {
     VGUArcType arcType = VGU_ARC_PIE;
     VGfloat x,y,a,b,start,stop,type;
@@ -376,6 +402,86 @@ static int P5_Arc(lua_State *L) {
     if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
         flushPathByIndex(index);
     return 0;
+}
+
+static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
+    switch (mode[ELLIPSE]) {
+        case P5_CORNER:
+            a = a + c/2;
+            b = b + d/2;
+            break;
+        case P5_CORNERS:
+            a = (a + c)/2 ;
+            b = (b + d)/2;
+            c = (c - a)*2;
+            d = (d - b)*2;
+            break;
+        case P5_RADIUS:
+            c = c*2;
+            d = d*2;
+            break;
+    }
+    
+    int index = findIndex();
+    vguEllipse(paths[index],a,b,c,d);
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
+    return 0;
+}
+
+static int P5_Circle(lua_State *L) {
+    VGfloat a = luaL_checknumber(L, 1);
+    VGfloat b = luaL_checknumber(L, 2);
+    VGfloat c = luaL_checknumber(L, 3);
+    
+    return _Ellipse(a,b,c,c);
+}
+
+static int P5_Ellipse(lua_State *L) {
+    
+    VGfloat a = luaL_checknumber(L, 1);
+    VGfloat b = luaL_checknumber(L, 2);
+    VGfloat c = luaL_checknumber(L, 3);
+    VGfloat d = luaL_checknumber(L, 4);
+    
+    return _Ellipse(a,b,c,d);
+}
+
+static int P5_Line(lua_State *L) {
+    
+    VGfloat a = luaL_checknumber(L, 1);
+    VGfloat b = luaL_checknumber(L, 2);
+    VGfloat c = luaL_checknumber(L, 3);
+    VGfloat d = luaL_checknumber(L, 4);
+    
+    int index = findIndex();
+    vguLine(paths[index],a,b,c,d);
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
+    return 0;
+}
+
+static int P5_Point(lua_State *L) {
+    VGfloat x = luaL_checknumber(L, 1);
+    VGfloat y = luaL_checknumber(L, 2);
+    
+    int index = findIndex();
+    vguEllipse(paths[index],x-2,y-2,4,4);
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
+}
+
+static int P5_Quad(lua_State *L) {
+    const VGfloat coords[8] = {
+        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
+        luaL_checknumber(L, 5),luaL_checknumber(L, 6),
+        luaL_checknumber(L, 7),luaL_checknumber(L, 8)
+    };
+    int index = findIndex();
+    vguPolygon(paths[index],coords,8,true);
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
 }
 
 static int _RoundRect(lua_State *L) {
@@ -443,72 +549,16 @@ static int P5_Rect(lua_State *L) {
   return 0;
 }
 
-static int P5_Ellipse(lua_State *L) {
-    
-  VGfloat a = luaL_checknumber(L, 1);
-  VGfloat b = luaL_checknumber(L, 2);
-  VGfloat c = luaL_checknumber(L, 3);
-  VGfloat d = luaL_checknumber(L, 4);
-  
-  switch (mode[ELLIPSE]) {
-    case P5_CORNER:
-	  a = a + c/2;
-	  b = b + d/2;
-      break;
-    case P5_CORNERS:
-	  a = (a + c)/2 ;
-	  b = (b + d)/2;
-	  c = (c - a)*2;
-	  d = (d - b)*2;
-      break;
-    case P5_RADIUS:
-	  c = c*2;
-	  d = d*2;
-      break;
-  }
-    
-  int index = findIndex();
-  vguEllipse(paths[index],a,b,c,d);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-    flushPathByIndex(index);
-  return 0;
-}
-
-static int P5_Line(lua_State *L) {
-
-  VGfloat a = luaL_checknumber(L, 1);
-  VGfloat b = luaL_checknumber(L, 2);
-  VGfloat c = luaL_checknumber(L, 3);
-  VGfloat d = luaL_checknumber(L, 4);
-    
-  int index = findIndex();
-  vguLine(paths[index],a,b,c,d);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-    flushPathByIndex(index);
-  return 0;
-}
-
-static int P5_Point(lua_State *L) {
-  VGfloat x = luaL_checknumber(L, 1);
-  VGfloat y = luaL_checknumber(L, 2);
-    
-  int index = findIndex();
-  vguEllipse(paths[index],x-2,y-2,4,4);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-    flushPathByIndex(index);
-}
-
-static int P5_Quad(lua_State *L) {
-  const VGfloat coords[8] = {
+static int P5_Square(lua_State *L) {
+    const VGfloat coords[8] = {
         luaL_checknumber(L, 1),luaL_checknumber(L, 2),
         luaL_checknumber(L, 3),luaL_checknumber(L, 4),
-        luaL_checknumber(L, 5),luaL_checknumber(L, 6),
-        luaL_checknumber(L, 7),luaL_checknumber(L, 8)
-  };
-  int index = findIndex();
-  vguPolygon(paths[index],coords,8,true);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-    flushPathByIndex(index);
+        luaL_checknumber(L, 5),luaL_checknumber(L, 6)
+    };
+    int index = findIndex();
+    vguPolygon(paths[index],coords,6,true);
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
 }
 
 static int P5_Triangle(lua_State *L) {
@@ -523,17 +573,199 @@ static int P5_Triangle(lua_State *L) {
     flushPathByIndex(index);
 }
 
-static int P5_Square(lua_State *L) {
-    const VGfloat coords[8] = {
-        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
-        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
-        luaL_checknumber(L, 5),luaL_checknumber(L, 6)
-    };
-    int index = findIndex();
-    vguPolygon(paths[index],coords,6,true);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
+// Curves:
+// bezier() -- todo
+// bezierDetail() -- todo
+// bezierPoint() -- todo
+// bezierTangent() -- todo
+// curve() -- todo
+// curveDetail() -- todo
+// curvePoint() -- todo
+// curveTangent() -- todo
+// curveTigntness -- todo
+
+// Attributes:
+// ellipseMode()
+// rectMode()
+// strokeCap()
+// strokeJoin()
+// strokeWeight()
+
+static int P5_EllipseMode(lua_State *L) {
+    mode[ELLIPSE] = luaL_checkint(L, 1);
+    return 0;
 }
+
+static int P5_RectMode(lua_State *L) {
+    mode[RECT] = luaL_checkint(L, 1);
+    return 0;
+}
+
+static int P5_StrokeCap(lua_State *L) {
+    props.attr[STROKE_CAP] = luaL_checkint(L, 1);
+    return 0;
+}
+
+static int P5_StrokeJoin(lua_State *L) {
+    props.attr[STROKE_JOIN] = luaL_checkint(L, 1);
+    return 0;
+}
+
+static int P5_StrokeWeight(lua_State *L) {
+    props.attr[STROKE_WEIGHT] = luaL_checkint(L, 1);
+}
+
+// Vertex commands:
+// beginContour() -- todo
+// beginShape()
+// bezierVertex()
+// curveVertex() -- todo
+// endShape()
+// quadraticVertex()
+// vertex()
+
+int kindShape;
+int pathSize;
+
+static int P5_BeginShape(lua_State *L) {
+    if (lua_gettop(L)==1)
+        kindShape = luaL_checknumber(L, 1);
+    else
+        kindShape = P5_POLYLINE;
+    vgClearPath(shape_path,VG_PATH_CAPABILITY_APPEND_FROM | VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_MODIFY);
+    pathSize = 0;
+    return 0;
+}
+
+static int P5_BezierVertex(lua_State *L) {
+    VGubyte seg = VG_CUBIC_TO;
+    const VGfloat coords[6] = {
+        luaL_checknumber(L, 1), luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3), luaL_checknumber(L, 4),
+        luaL_checknumber(L, 5), luaL_checknumber(L, 6)
+    };
+    vgAppendPathData(shape_path, 1, &seg, coords);
+    return 0;
+}
+
+static int P5_CurveVertex(lua_State *L) {
+    return 0;
+}
+
+static int P5_EndShape(lua_State *L) {
+    VGubyte seg = -1;
+    if (lua_gettop(L)==1) {
+        seg = VG_CLOSE_PATH;
+        VGfloat data = 0.0f;
+        vgAppendPathData(shape_path, 1, &seg, &data);
+    }
+    if (seg==VG_CLOSE_PATH) _FillPath(shape_path);
+    _StrokePath(shape_path);
+    _EventPath(shape_path);
+}
+
+static int P5_QuadraticVertex(lua_State *L) {
+    VGubyte seg = VG_QUAD_TO;
+    const VGfloat coords[4] = {
+        luaL_checknumber(L, 1), luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3), luaL_checknumber(L, 4)
+    };
+    vgAppendPathData(shape_path, 1, &seg, coords);
+    return 0;
+}
+
+static int P5_Vertex(lua_State *L) {
+    VGubyte seg;
+    int closePath = 0;
+    int points = 0;
+    const VGfloat coords[2] = {
+        luaL_checknumber(L, 1), luaL_checknumber(L, 2)
+    };
+    switch (kindShape) {
+        case P5_POINTS:
+            seg = VG_MOVE_TO;
+            points = 1;
+            break;
+        case P5_POLYLINE:
+            if (pathSize == 0)
+                seg = VG_MOVE_TO;
+            else
+                seg = VG_LINE_TO;
+            break;
+        case P5_LINES:
+            if (pathSize%2 == 0)
+                seg = VG_MOVE_TO;
+            else
+                seg = VG_LINE_TO;
+            break;
+        case P5_TRIANGLES:
+            if (pathSize%3 == 0)
+                seg = VG_MOVE_TO;
+            else {
+                seg = VG_LINE_TO;
+                if (pathSize%3 == 2) closePath = 1;
+            }
+            break;
+        case P5_QUADS:
+            if (pathSize%4 == 0)
+                seg = VG_MOVE_TO;
+            else {
+                seg = VG_LINE_TO;
+                if (pathSize%4 == 3) closePath = 1;
+            }
+            break;
+    }
+    pathSize++;
+    vgAppendPathData(shape_path, 1, &seg, coords);
+    if (points) {
+        seg = VG_LINE_TO;
+        vgAppendPathData(shape_path, 1, &seg, coords);
+    }
+    if (closePath) {
+        seg = VG_CLOSE_PATH;
+        vgAppendPathData(shape_path, 1, &seg, coords);
+    }
+    return 0;
+}
+
+// Loading & Displaying:
+// saveShape() - Diököl extension
+// shape()
+// shapeMode()
+
+static int P5_SaveShape(lua_State *L) {
+    VGubyte seg;
+    if (lua_gettop(L)==1) {
+        seg = luaL_checknumber(L, 1);
+        VGfloat data = 0.0f;
+        vgAppendPathData(shape_path, 1, &seg, &data);
+    }
+    pathId++;
+    shapePaths[pathId]=vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,0,0,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_PATH_TRANSFORMED_BOUNDS);
+    vgAppendPath(shapePaths[pathId],shape_path);
+    lua_pushnumber(L, pathId);
+    return 1;
+}
+
+static int P5_Shape(lua_State *L) {
+  int pathId = luaL_checkint(L, 1);
+  float x = luaL_checknumber(L,2);
+  float y = luaL_checknumber(L,3);
+  double sx = 1;
+  double sy = 1;
+  if (lua_gettop(L) == 5) {
+    sx = luaL_checknumber(L,4);
+    sy = luaL_checknumber(L,5);
+  }
+ // flushPath(shapePaths[pathId]);
+}
+
+static int P5_ShapeMode(lua_State *L) {
+    mode[SHAPE] = luaL_checkint(L, 1);
+    return 0;
+}
+
+// Input:
 
 static void flushBuffers() {
   for (int i=0; i<PATH_SIZE; i++)
@@ -545,19 +777,6 @@ static int P5_Flush(lua_State *L) {
   return 0;
 }
 
-static int P5_StrokeCap(lua_State *L) {
-  props.attr[STROKE_CAP] = luaL_checkint(L, 1);
-  return 0;
-}
-
-static int P5_StrokeJoin(lua_State *L) {
-  props.attr[STROKE_JOIN] = luaL_checkint(L, 1);
-  return 0;
-}
-
-static int P5_StrokeWeight(lua_State *L) {
-  props.attr[STROKE_WEIGHT] = luaL_checkint(L, 1);
-}
 
 static VGuint Color(lua_State *L) {
   VGuint r,g,b,a;
@@ -592,6 +811,94 @@ static int P5_Background(lua_State *L) {
   return 0;
 }
 
+static int P5_PopMatrix(lua_State *L) {
+    Matrix* temp = mtrx_stack;
+    mtrx_stack = mtrx_stack->next;
+    
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgLoadMatrix(temp->data);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgLoadMatrix(temp->data);
+    return 0;
+}
+
+static int P5_PrintMatrix(lua_State *L) {
+    Matrix* temp = mtrx_stack;
+    int i,j;
+    for (i=0;i<3;i++) {
+        for (j=0; j<3; j++)
+            printf("%f ",temp->data[i*3+j]);
+        printf("\n");
+    }
+    return 0;
+}
+
+static int P5_PushMatrix(lua_State *L) {
+    Matrix* temp;
+    temp = mtrx_new();
+    
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(temp->data);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgGetMatrix(temp->data);
+    temp->next = mtrx_stack;
+    mtrx_stack = temp;
+    return 0;
+}
+
+static int P5_ResetMatrix(lua_State *L) {
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgLoadIdentity();
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgLoadIdentity();
+    return 0;
+}
+
+static int P5_Rotate(lua_State *L) {
+    float angle = _deg(luaL_checknumber(L, 1));
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgRotate(angle);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgRotate(angle);
+    return 0;
+}
+
+static int P5_Scale(lua_State *L) {
+    float sx = luaL_checknumber(L, 1);
+    float sy = sx;
+    if (lua_gettop(L)==2)
+        sy = luaL_checknumber(L, 2);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgScale(sx,sy);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgScale(sx,sy);
+    return 0;
+}
+
+static int P5_ShearX(lua_State *L) {
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgShear(luaL_checknumber(L, 1),0.0f);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgShear(luaL_checknumber(L, 1),0.0f);
+    return 0;
+}
+
+static int P5_ShearY(lua_State *L) {
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgShear(0.0f,luaL_checknumber(L, 1));
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgShear(0.0f,luaL_checknumber(L, 1));
+    return 0;
+}
+
+static int P5_Translate(lua_State *L) {
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgTranslate(luaL_checknumber(L, 1),luaL_checknumber(L, 2));
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgTranslate(luaL_checknumber(L, 1),luaL_checknumber(L, 2));
+    return 0;
+}
+
 static int P5_Fill(lua_State *L) {
   style.attr[FILL_COLOR] = Color(L);
   return 0;
@@ -612,23 +919,8 @@ static int P5_NoStroke(lua_State *L) {
   return 0;
 }
 
-static int P5_RectMode(lua_State *L) {
-  mode[RECT] = luaL_checkint(L, 1);
-  return 0;
-}
-
-static int P5_EllipseMode(lua_State *L) {
-  mode[ELLIPSE] = luaL_checkint(L, 1);
-  return 0;
-}
-
 static int P5_ImageMode(lua_State *L) {
   mode[IMAGE] = luaL_checkint(L, 1);
-  return 0;
-}
-
-static int P5_ShapeMode(lua_State *L) {
-  mode[SHAPE] = luaL_checkint(L, 1);
   return 0;
 }
 
@@ -1005,14 +1297,17 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     lua_pushcfunction(L,P5_Arc);
     lua_setglobal(L,"arc");
     
-	lua_pushcfunction(L,P5_Rect);
-	lua_setglobal(L,"rect");
-    
     lua_pushcfunction(L,P5_Ellipse);
     lua_setglobal(L,"ellipse");
   
+    lua_pushcfunction(L,P5_Circle);
+    lua_setglobal(L,"circle");
+    
     lua_pushcfunction(L,P5_Line);
     lua_setglobal(L,"line");
+    
+    lua_pushcfunction(L,P5_Rect);
+    lua_setglobal(L,"rect");
     
     lua_pushcfunction(L,P5_StrokeCap);
 	lua_setglobal(L,"strokeCap");
@@ -1059,6 +1354,18 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     lua_pushcfunction(L,P5_Smooth);
     lua_setglobal(L,"smooth");
     
+    lua_pushcfunction(L,P5_PopMatrix);
+    lua_setglobal(L,"popMatrix");
+    
+    lua_pushcfunction(L,P5_PrintMatrix);
+    lua_setglobal(L,"printMatrix");
+    
+    lua_pushcfunction(L,P5_PushMatrix);
+    lua_setglobal(L,"pushMatrix");
+    
+    lua_pushcfunction(L,P5_ResetMatrix);
+    lua_setglobal(L,"resetMatrix");
+
     lua_pushcfunction(L,P5_MouseButton);
     lua_setglobal(L,"mouseButton");
     
