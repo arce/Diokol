@@ -236,28 +236,29 @@ static void getArrColor(VGfloat* arr, VGuint color) {
   arr[3] = ((color) & 0xFF)/255.0;
 }
 
-static int P5_Time(lua_State *L) {
-  struct timeval tv;
-  double t;
-  gettimeofday(&tv,NULL);
-  t = (tv.tv_sec*1000)+(tv.tv_usec/1000);
-  lua_pushnumber(L,t);
-  return 1;
-}
+// Structure:
+// exit()
+// loop()
+// noLoop()
+// popStyle() -- todo
+// pushStyle() -- todo
+// redraw()
+// setTitle() -- todo
+// time() -- Diököl extension
 
 static int P5_Exit(lua_State *L) {
-  done = true;
-  app_close();
+    done = true;
+    app_close();
 }
 
 static int P5_Loop(lua_State *L) {
-  loop = true;
-  return 0;
+    loop = true;
+    return 0;
 }
 
 static int P5_NoLoop(lua_State *L) {
-  loop = false;
-  return 0;
+    loop = false;
+    return 0;
 }
 
 static int P5_Redraw(lua_State *L) {
@@ -265,33 +266,62 @@ static int P5_Redraw(lua_State *L) {
   return 0;
 }
 
-static int P5_Size(lua_State *L) {
-  width = luaL_checkint(L, 1);
-  height = luaL_checkint(L, 2);
-  resizeWindow(width,height);
-  vgResizeSurfaceSH(width,height);
-  return 0;
+
+static int P5_Time(lua_State *L) {
+    struct timeval tv;
+    double t;
+    gettimeofday(&tv,NULL);
+    t = (tv.tv_sec*1000)+(tv.tv_usec/1000);
+    lua_pushnumber(L,t);
+    return 1;
 }
 
+// Environment:
+// frameCount()
+// frameRate()
+// fullScreen() -- todo
+// height()
+// size()
+// width()
+
 static int P5_FrameCount(lua_State *L) {
-  lua_pushnumber(L,frameCount);
-  return 1;
+    lua_pushnumber(L,frameCount);
+    return 1;
 }
 
 static int P5_FrameRate(lua_State *L) {
-  frameRate = luaL_checkint(L, 1);
-  return 0;
+    frameRate = luaL_checkint(L, 1);
+    return 0;
 }
 
 static int P5_Height(lua_State *L) {
-  lua_pushnumber(L, height);
-  return 1;
+    lua_pushnumber(L, height);
+    return 1;
+}
+
+static int P5_Size(lua_State *L) {
+    width = luaL_checkint(L, 1);
+    height = luaL_checkint(L, 2);
+    resizeWindow(width,height);
+    vgResizeSurfaceSH(width,height);
+    return 0;
 }
 
 static int P5_Width(lua_State *L) {
-  lua_pushnumber(L, width);
-  return 1;
+    lua_pushnumber(L, width);
+    return 1;
 }
+
+// 2D Primitives:
+// arc()
+// circle()
+// ellipse()
+// line ()
+// point()
+// quad()
+// rect()
+// square()
+// triangle
 
 static void flushPathByIndex(int index) {
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)==0) return;
@@ -352,17 +382,6 @@ static int findIndex() {
   next = (next==PATH_SIZE)?0:next;
   return next;
 }
-
-// 2D Primitives:
-// arc()
-// circle()
-// ellipse()
-// line ()
-// point()
-// quad()
-// rect()
-// square()
-// triangle
 
 static int P5_Arc(lua_State *L) {
     VGUArcType arcType = VGU_ARC_PIE;
@@ -573,17 +592,6 @@ static int P5_Triangle(lua_State *L) {
     flushPathByIndex(index);
 }
 
-// Curves:
-// bezier() -- todo
-// bezierDetail() -- todo
-// bezierPoint() -- todo
-// bezierTangent() -- todo
-// curve() -- todo
-// curveDetail() -- todo
-// curvePoint() -- todo
-// curveTangent() -- todo
-// curveTigntness -- todo
-
 // Attributes:
 // ellipseMode()
 // rectMode()
@@ -766,50 +774,121 @@ static int P5_ShapeMode(lua_State *L) {
 }
 
 // Input:
+// mouseButton
+// mouseClicked()
+// mouseDragged()
+// mouseMoved()
+// mousePressed()
+// mousePressed
+// mouseReleased()
+// mouseWheel()
+// mouseX
+// mouseY
+// pmouseX
+// pmouseY
 
-static void flushBuffers() {
-  for (int i=0; i<PATH_SIZE; i++)
-    flushPathByIndex(i);
+
+static int P5_MouseButton(lua_State *L) {
+    lua_pushnumber(L,mouseButton);
+    return 1;
 }
 
-static int P5_Flush(lua_State *L) {
-  flushBuffers();
-  return 0;
+static int P5_IsMousePressed(lua_State *L) {
+    lua_pushboolean(L,isEvent[MOUSE_PRESSED]);
+    return 1;
 }
 
-
-static VGuint Color(lua_State *L) {
-  VGuint r,g,b,a;
-  if (lua_gettop(L)==1) {
-    r = g = b = luaL_checkint(L, 1);
-    if (r>255) return r;
-    a = 255;
-  } else if (lua_gettop(L)==2) {
-	r = g = b = luaL_checkint(L, 1);
-	a = luaL_checkint(L, 2);
-  } else if (lua_gettop(L)==3) {
-	r = luaL_checkint(L, 1);
-	g = luaL_checkint(L, 2);
-	b = luaL_checkint(L, 3);
-	a = 255;
-  } else if (lua_gettop(L)==4) {
-	r = luaL_checkint(L, 1);
-	g = luaL_checkint(L, 2);
-	b = luaL_checkint(L, 3);
-	a = luaL_checkint(L, 4);
-  }
-  return ((r & 0xff) << 24) + ((g & 0xff) << 16) + 
-		((b & 0xff) << 8) + (a & 0xff);
+static int Dkl_MousePressed(int xpos, int ypos,int button) {
+    pmouseX = mouseX;
+    pmouseY = mouseY;
+    mouseX = xpos;
+    mouseY = ypos;
+    if (button)
+        mouseButton = P5_RIGHT;
+    else
+        mouseButton = P5_LEFT;
+    eventType = MOUSE_PRESSED;
+    isEvent[MOUSE_PRESSED] = true;
+    return 0;
 }
 
-static int P5_Background(lua_State *L) {
-  VGfloat RGBA[4];
-  getArrColor(RGBA,Color(L));
-  vgSetfv(VG_CLEAR_COLOR, 4, RGBA);
-  vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
-  vgClear(0,0,width,height);
-  return 0;
+static int Dkl_MouseReleased(int xpos, int ypos, int button) {
+    pmouseX = mouseX;
+    pmouseY = mouseY;
+    mouseX = xpos;
+    mouseY = ypos;
+    if (button)
+        mouseButton = P5_RIGHT;
+    else
+        mouseButton = P5_LEFT;
+    eventType = MOUSE_RELEASED;
+    isEvent[MOUSE_RELEASED] = true;
+    return 0;
 }
+
+static int Dkl_MouseMoved(int xpos, int ypos, int dragged) {
+    pmouseX = mouseX;
+    pmouseY = mouseY;
+    mouseX = xpos;
+    mouseY = ypos;
+    if (dragged) {
+        eventType = MOUSE_DRAGGED;
+        isEvent[MOUSE_DRAGGED] = true;
+    } else {
+        eventType = MOUSE_MOVED;
+        isEvent[MOUSE_MOVED] = true;
+    }
+    return 0;
+}
+
+static void Dkl_ProcessEvent(int eventType) {
+    lua_getglobal(L,eventArray[eventType]);
+    if (eventType == WINDOW_RESIZED) {
+        lua_pushnumber(L, width);
+        lua_pushnumber(L, height);
+    } else if (eventType == KEY_PRESSED || eventType == KEY_RELEASED) {
+        lua_pushstring(L, keyPress);
+        lua_pushnumber(L, keyCode);
+    } else {
+        lua_pushnumber(L, mouseX);
+        lua_pushnumber(L, mouseY);
+    }
+    if (lua_pcall(L, 2, 0, 0)!=0)
+        eventFunc[eventType] = false;
+    if (eventType == MOUSE_RELEASED && eventFunc[MOUSE_CLICKED]) {
+        lua_getglobal(L,eventArray[MOUSE_CLICKED]);
+        lua_pushnumber(L, mouseX);
+        lua_pushnumber(L, mouseY);
+        if (lua_pcall(L, 2, 0, 0)!=0)
+            eventFunc[MOUSE_CLICKED] = false;
+    }
+}
+
+// Keyboard:
+// key
+// keyCode
+// keyPressed()
+// keyPressed
+// keyReleased()
+// keyTyped()
+
+static int Dkl_KeyPressed(char key, int code) {
+    keyPress[0] = key;
+    keyCode = code;
+    eventType = KEY_PRESSED;
+    isEvent[KEY_PRESSED] = true;
+    return 0;
+}
+
+static int Dkl_KeyReleased(char key, int code) {
+    keyCode = code;
+    eventType = KEY_RELEASED;
+    isEvent[KEY_RELEASED] = true;
+    return 0;
+}
+
+// Transform
+
 
 static int P5_PopMatrix(lua_State *L) {
     Matrix* temp = mtrx_stack;
@@ -899,23 +978,74 @@ static int P5_Translate(lua_State *L) {
     return 0;
 }
 
+// Color Setting:
+// background()
+// clear()
+// fill()
+// noFill()
+// noStroke()
+// stroke()
+
+static VGuint Color(lua_State *L) {
+    VGuint r,g,b,a;
+    if (lua_gettop(L)==1) {
+        r = g = b = luaL_checkint(L, 1);
+        if (r>255) return r;
+        a = 255;
+    } else if (lua_gettop(L)==2) {
+        r = g = b = luaL_checkint(L, 1);
+        a = luaL_checkint(L, 2);
+    } else if (lua_gettop(L)==3) {
+        r = luaL_checkint(L, 1);
+        g = luaL_checkint(L, 2);
+        b = luaL_checkint(L, 3);
+        a = 255;
+    } else if (lua_gettop(L)==4) {
+        r = luaL_checkint(L, 1);
+        g = luaL_checkint(L, 2);
+        b = luaL_checkint(L, 3);
+        a = luaL_checkint(L, 4);
+    }
+    return ((r & 0xff) << 24) + ((g & 0xff) << 16) +
+    ((b & 0xff) << 8) + (a & 0xff);
+}
+
+static int P5_Background(lua_State *L) {
+    VGfloat RGBA[4];
+    getArrColor(RGBA,Color(L));
+    vgSetfv(VG_CLEAR_COLOR, 4, RGBA);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    vgClear(0,0,width,height);
+    return 0;
+}
+
 static int P5_Fill(lua_State *L) {
-  style.attr[FILL_COLOR] = Color(L);
-  return 0;
+    style.attr[FILL_COLOR] = Color(L);
+    return 0;
 }
 
 static int P5_NoFill(lua_State *L) {
-  style.attr[FILL_COLOR] = 0;
-  return 0;
-}
-
-static int P5_Stroke(lua_State *L) {
-  style.attr[STROKE_COLOR] = Color(L);
-  return 0;
+    style.attr[FILL_COLOR] = 0;
+    return 0;
 }
 
 static int P5_NoStroke(lua_State *L) {
-  style.attr[STROKE_COLOR] = 0;
+    style.attr[STROKE_COLOR] = 0;
+    return 0;
+}
+
+static int P5_Stroke(lua_State *L) {
+    style.attr[STROKE_COLOR] = Color(L);
+    return 0;
+}
+
+static void flushBuffers() {
+  for (int i=0; i<PATH_SIZE; i++)
+    flushPathByIndex(i);
+}
+
+static int P5_Flush(lua_State *L) {
+  flushBuffers();
   return 0;
 }
 
@@ -951,97 +1081,6 @@ static int P5_Key(lua_State *L) {
 static int P5_KeyCode(lua_State *L) {
   lua_pushnumber(L,keyCode);
   return 1;
-}
-
-static int P5_MouseButton(lua_State *L) {
-  lua_pushnumber(L,mouseButton);
-  return 1;
-}
-
-static int P5_IsMousePressed(lua_State *L) {
-  lua_pushboolean(L,isEvent[MOUSE_PRESSED]);
-  return 1;
-}
-
-static int Dkl_KeyPressed(char key, int code) {
-  keyPress[0] = key;
-  keyCode = code;
-  eventType = KEY_PRESSED;
-  isEvent[KEY_PRESSED] = true;
-  return 0;
-}
-
-static int Dkl_KeyReleased(char key, int code) {
-  keyCode = code;
-  eventType = KEY_RELEASED;
-  isEvent[KEY_RELEASED] = true;
-  return 0;
-}
-
-static int Dkl_MousePressed(int xpos, int ypos,int button) {
-  pmouseX = mouseX;
-  pmouseY = mouseY;
-  mouseX = xpos;
-  mouseY = ypos;
-  if (button)
-    mouseButton = P5_RIGHT;
-  else
-    mouseButton = P5_LEFT;
-  eventType = MOUSE_PRESSED;
-  isEvent[MOUSE_PRESSED] = true;
-  return 0;
-}
-
-static int Dkl_MouseReleased(int xpos, int ypos, int button) {
-    pmouseX = mouseX;
-    pmouseY = mouseY;
-    mouseX = xpos;
-    mouseY = ypos;
-    if (button)
-        mouseButton = P5_RIGHT;
-    else
-        mouseButton = P5_LEFT;
-    eventType = MOUSE_RELEASED;
-    isEvent[MOUSE_RELEASED] = true;
-    return 0;
-}
-
-static int Dkl_MouseMoved(int xpos, int ypos, int dragged) {
-    pmouseX = mouseX;
-    pmouseY = mouseY;
-    mouseX = xpos;
-    mouseY = ypos;
-    if (dragged) {
-        eventType = MOUSE_DRAGGED;
-        isEvent[MOUSE_DRAGGED] = true;
-    } else {
-        eventType = MOUSE_MOVED;
-        isEvent[MOUSE_MOVED] = true;
-    }
-    return 0;
-}
-
-static void Dkl_ProcessEvent(int eventType) {
-    lua_getglobal(L,eventArray[eventType]);
-    if (eventType == WINDOW_RESIZED) {
-        lua_pushnumber(L, width);
-        lua_pushnumber(L, height);
-    } else if (eventType == KEY_PRESSED || eventType == KEY_RELEASED) {
-        lua_pushstring(L, keyPress);
-        lua_pushnumber(L, keyCode);
-    } else {
-        lua_pushnumber(L, mouseX);
-        lua_pushnumber(L, mouseY);
-    }
-    if (lua_pcall(L, 2, 0, 0)!=0)
-        eventFunc[eventType] = false;
-    if (eventType == MOUSE_RELEASED && eventFunc[MOUSE_CLICKED]) {
-        lua_getglobal(L,eventArray[MOUSE_CLICKED]);
-        lua_pushnumber(L, mouseX);
-        lua_pushnumber(L, mouseY);
-        if (lua_pcall(L, 2, 0, 0)!=0)
-            eventFunc[MOUSE_CLICKED] = false;
-    }
 }
 
 // OpenVG functions
