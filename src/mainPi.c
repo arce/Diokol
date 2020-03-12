@@ -209,15 +209,16 @@ int mouseinit(int w, int h) {
 }
 
 unsigned int initOpenVG(int width, int height) {
-
 	vg_init(width,height);
 	return 1;
 }
 
 void destroyOpenVG(void) {
-
-//	vgDestroyContextSH();
-	lua_close(L);
+  eglSwapBuffers(state->display, state->surface);
+  eglMakeCurrent(state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+  eglDestroySurface(state->display, state->surface);
+  eglDestroyContext(state->display, state->context);
+  eglTerminate(state->display);
 }
 
 void vgResizeSurfaceSH(VGint width, VGint height) {}
@@ -228,7 +229,8 @@ void swapBuffers(void) {
 	VGErrorCode errCode = vgGetError();
 	if (errCode != VG_NO_ERROR) printf("Error code: %d\n",errCode);
 	eglSwapBuffers(state->display, state->surface);
-	assert(eglGetError() == EGL_SUCCESS);
+    errCode = vgGetError();
+    if (errCode != EGL_SUCCESS) printf("Error code: %d\n",errCode);
 }
 
 #ifdef WIN32
@@ -276,6 +278,7 @@ void init(int *w, int *h) {
 void app_close() {
   resetTermios();
   destroyOpenVG();
+  lua_close(L);
   killWindow();
   exit(EXIT_SUCCESS);
 }
@@ -297,9 +300,6 @@ int main(int argc, const char * argv[]) {
     
     lua_init(argc,argv);
     
-    // init application
- //   initApp(vgPrivGetSurfaceWidthMZT(vgWindowSurface), vgPrivGetSurfaceHeightMZT(vgWindowSurface));
-    // start frame counter
     if (mouseinit(width, height) != 0) {
 		fprintf(stderr, "Unable to initialize the mouse\n");
 		exit(1);
@@ -310,7 +310,7 @@ int main(int argc, const char * argv[]) {
     // main loop
     char ch;
     initTermios(0); //oldChars, newChars);
-    while (true) {
+    while (!done) {
 		 //sleep_ms(1000/frameRate);
         // process keyboard and mouse events
         // check if some information text must be displayed
