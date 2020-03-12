@@ -133,9 +133,7 @@ int error;
 VGPaint strokePaint;
 VGPaint fillPaint;
 
-VGPath shape_path;
 VGPath paths[PATH_SIZE];
-VGPath shapePaths[255];
 
 int mode[5] = {P5_CENTER,P5_CORNER,0,0,0}; // [0] = ellipse, [1] = rect, [2] = image, [3] = shape, [4] = text
 //int style[5] = {0,0,1,0xFF00FF00,0xFF000000}; // [0] = strokeJoin, [1] = strokeCap, [2] = strokeWeight, [3] = strokeColor, [4] = fillColor
@@ -148,7 +146,6 @@ int fHeight[100];
 int fSize[100];
 int imageCount = 0;
 int fontCount = 1;
-int pathId=0;
 int imageId=0;
 
 union StyleUnion {
@@ -212,6 +209,7 @@ int frameCount = 0;
 
 VGint width=640, height=480;
 char scriptname[256];
+char mainPath[256];
 int frameRate = 60;
 
 int32_t clearColor = 0xAAAAAAFF;
@@ -678,6 +676,7 @@ static int P5_StrokeWeight(lua_State *L) {
 // quadraticVertex()
 // vertex()
 
+VGPath shape_path = NULL;
 int kindShape;
 int pathSize;
 
@@ -686,7 +685,10 @@ static int P5_BeginShape(lua_State *L) {
         kindShape = luaL_checknumber(L, 1);
     else
         kindShape = P5_POLYLINE;
-    vgClearPath(shape_path,VG_PATH_CAPABILITY_APPEND_FROM | VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_MODIFY);
+    if (shape_path==NULL)
+      shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,1.0f,0.0f,0,0,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_APPEND_FROM);
+    else
+      vgClearPath(shape_path,VG_PATH_CAPABILITY_APPEND_FROM | VG_PATH_CAPABILITY_APPEND_TO);
     pathSize = 0;
     return 0;
 }
@@ -713,9 +715,11 @@ static int P5_EndShape(lua_State *L) {
         VGfloat data = 0.0f;
         vgAppendPathData(shape_path, 1, &seg, &data);
     }
-    if (seg==VG_CLOSE_PATH) {}
-    
-    ///// to-do
+    int index = findIndex();
+    vgAppendPath(paths[index],shape_path);
+    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+        flushPathByIndex(index);
+    shape_path = NULL;
 }
 
 static int P5_QuadraticVertex(lua_State *L) {
@@ -787,6 +791,9 @@ static int P5_Vertex(lua_State *L) {
 // shape()
 // shapeMode()
 
+int pathId=0;
+VGPath shapePaths[255];
+
 static int P5_SaveShape(lua_State *L) {
     VGubyte seg;
     if (lua_gettop(L)==1) {
@@ -794,15 +801,15 @@ static int P5_SaveShape(lua_State *L) {
         VGfloat data = 0.0f;
         vgAppendPathData(shape_path, 1, &seg, &data);
     }
-    pathId++;
-    shapePaths[pathId]=vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,0,0,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_PATH_TRANSFORMED_BOUNDS);
-    vgAppendPath(shapePaths[pathId],shape_path);
+    shapePaths[pathId] = shape_path;
+    shape_path = NULL;
     lua_pushnumber(L, pathId);
+    pathId++;
     return 1;
 }
 
 static int P5_Shape(lua_State *L) {
-  int pathId = luaL_checkint(L, 1);
+  int id = luaL_checkint(L, 1);
   float x = luaL_checknumber(L,2);
   float y = luaL_checknumber(L,3);
   double sx = 1;
@@ -811,7 +818,10 @@ static int P5_Shape(lua_State *L) {
     sx = luaL_checknumber(L,4);
     sy = luaL_checknumber(L,5);
   }
- // flushPath(shapePaths[pathId]);
+  int index = findIndex();
+  vgAppendPath(paths[index],shapePaths[id]);
+  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
+    flushPathByIndex(index);
 }
 
 static int P5_ShapeMode(lua_State *L) {
@@ -1305,7 +1315,7 @@ VGImage _createImageFromFile(const char *filename, int* w, int* h) {
     else rgbaFormat = VG_sRGBA_8888;
     
     char filepath[256];
-    strcpy(filepath,shape_path);
+    strcpy(filepath,mainPath);
     
     data = stbi_load(strcat(filepath,filename), &width, &height, &n, STBI_rgb_alpha);
     dstride = width * 4;
@@ -1474,7 +1484,7 @@ VGFont _createFontFromFile(const char *filename, unsigned short size) {
     int num_verts;
     
     char filepath[256];
-    strcpy(filepath,shape_path);
+    strcpy(filepath,mainPath);
     fread(ttf_buffer, 1, 1<<24, fopen(strcat(filepath,filename), "rb"));
     
     VGPath path;
@@ -1544,7 +1554,7 @@ VGFont _loadFontFromFile(const char *filename, unsigned short size) {
     int glyphIndex;
     
     char filepath[256];
-    strcpy(filepath,shape_path);
+    strcpy(filepath,mainPath);
     fread(ttf_buffer, 1, 1<<24, fopen(strcat(filepath,filename), "rb"));
     
     VGImage image;
@@ -2025,6 +2035,9 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     lua_setglobal(L,"DELETE");
     
     // functions
+    
+    lua_pushcfunction(L,P5_Time);
+    lua_setglobal(L,"time");
     
     lua_pushcfunction(L,P5_Exit);
     lua_setglobal(L,"exit");
