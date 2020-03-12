@@ -339,7 +339,7 @@ static int P5_Height(lua_State *L) {
 }
 
 static int P5_NoSmooth(lua_State *L) {
-    glDisable(GL_MULTISAMPLE);
+    //glDisable(GL_MULTISAMPLE);
     return 0;
 }
 
@@ -1808,10 +1808,12 @@ void vg_init(int w,int h) {
 	vgSetParameteri(fillPaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
 	
     style.data = 0;
+    props.data = 0;
     
 	for (int i=0; i<PATH_SIZE; i++) {
 	  paths[i] = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,MAX_SEGMENTS,6,VG_PATH_CAPABILITY_APPEND_TO);
 	  pathStyle[i].data = 0;
+      pathProps[i].data = 0;
 	}
     
     getArrColor(RGBA,clearColor);
