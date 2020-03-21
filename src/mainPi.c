@@ -100,6 +100,33 @@ int left_count = 0;
 int quitState = 0;
 #define    CUR_SIZ  16					   // cursor size, pixels beyond centre dot
 
+//
+// Terminal settings
+//
+
+// terminal settings structures
+struct termios new_term_attr;
+struct termios orig_term_attr;
+
+// saveterm saves the current terminal settings
+void saveterm() {
+    tcgetattr(fileno(stdin), &orig_term_attr);
+}
+
+// rawterm sets the terminal to raw mode
+void rawterm() {
+    memcpy(&new_term_attr, &orig_term_attr, sizeof(struct termios));
+    new_term_attr.c_lflag &= ~(ICANON | ECHO | ECHOE | ECHOK | ECHONL | ECHOPRT | ECHOKE | ICRNL);
+    new_term_attr.c_cc[VTIME] = 0;
+    new_term_attr.c_cc[VMIN] = 0;
+    tcsetattr(fileno(stdin), TCSANOW, &new_term_attr);
+}
+
+// restore resets the terminal to the previously saved setting
+void restoreterm() {
+    tcsetattr(fileno(stdin), TCSANOW, &orig_term_attr);
+}
+
 // evenThread reads from the mouse input file
 void *eventThread(void *arg) {
 
@@ -277,8 +304,8 @@ void init(int *w, int *h) {
 
 void app_close() {
   resetTermios();
-  destroyOpenVG();
   lua_close(L);
+  destroyOpenVG();
   killWindow();
   exit(EXIT_SUCCESS);
 }

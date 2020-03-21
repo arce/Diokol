@@ -181,6 +181,7 @@ NSOpenGLView *view;
         CGLUnlockContext([[self openGLContext] CGLContextObj]);
         [self unlockFocus];
         glFlush();
+        if (done) 
     }
 }
 
