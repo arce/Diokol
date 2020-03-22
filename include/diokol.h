@@ -255,6 +255,7 @@ struct Context *ctx = NULL;
 
 static int P5_Exit(lua_State *L) {
     done = true;
+    return 0;
 }
 
 static int P5_Loop(lua_State *L) {
@@ -298,7 +299,6 @@ static int P5_Redraw(lua_State *L) {
   vg_call("draw");
   return 0;
 }
-
 
 static int P5_Time(lua_State *L) {
     struct timeval tv;
@@ -2319,8 +2319,4 @@ void lua_init(int argc, const char * argv[]) {
   vg_call("setup");
   initialized=true;
   srand(time(NULL));
-}
-
-void lua_destroy() {
-  lua_close(L);
 }

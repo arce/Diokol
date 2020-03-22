@@ -51,7 +51,6 @@ NSOpenGLView *view;
 }
 
 - (void) dealloc {
-    [self endOpenVG];
   //  [super dealloc];
     [window release];
 }
@@ -167,9 +166,11 @@ NSOpenGLView *view;
     return 1;
 }
 
-- (void) endOpenVG {
+- (void) app_close {
+    lua_close(L);
     vgDestroyContextSH();
-    lua_destroy();
+    [window dealloc];
+    exit(EXIT_SUCCESS);
 }
 
 - (void) drawFrame {
@@ -181,8 +182,8 @@ NSOpenGLView *view;
         CGLUnlockContext([[self openGLContext] CGLContextObj]);
         [self unlockFocus];
         glFlush();
-        if (done) 
     }
+    if (done) app_close();
 }
 
 - (void) drawRect :(NSRect)dirtyRect {

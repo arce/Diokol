@@ -46,4 +46,5 @@ end
 function mouseMoved(x,y)
   mouseX = x
   mouseY = y
+  if (x==y) then exit() end
 end
