@@ -149,12 +149,12 @@ int fontCount = 1;
 int imageId=0;
 
 union StyleUnion {
-  VGuint attr[2];
+  int32_t attr[2];
   int64_t data;
 };
 
 union PropsUnion {
-  VGshort attr[4];
+  int16_t attr[4];
   int64_t data;
 };
 
@@ -531,6 +531,7 @@ static int P5_Point(lua_State *L) {
     vguEllipse(paths[index],x-2,y-2,4,4);
     if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
         flushPathByIndex(index);
+    return 0;
 }
 
 static int P5_Quad(lua_State *L) {
@@ -544,6 +545,7 @@ static int P5_Quad(lua_State *L) {
     vguPolygon(paths[index],coords,8,true);
     if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
         flushPathByIndex(index);
+    return 0;
 }
 
 static int _RoundRect(lua_State *L) {
@@ -621,6 +623,7 @@ static int P5_Square(lua_State *L) {
     vguPolygon(paths[index],coords,6,true);
     if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
         flushPathByIndex(index);
+    return 0;
 }
 
 static int P5_Triangle(lua_State *L) {
@@ -633,6 +636,7 @@ static int P5_Triangle(lua_State *L) {
   vguPolygon(paths[index],coords,6,true);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
+  return 0;
 }
 
 // Attributes:
@@ -664,6 +668,7 @@ static int P5_StrokeJoin(lua_State *L) {
 
 static int P5_StrokeWeight(lua_State *L) {
     props.attr[STROKE_WEIGHT] = luaL_checkint(L, 1);
+    return 0;
 }
 
 // Vertex commands:
@@ -719,6 +724,7 @@ static int P5_EndShape(lua_State *L) {
     if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
         flushPathByIndex(index);
     shape_path = NULL;
+    return 0;
 }
 
 static int P5_QuadraticVertex(lua_State *L) {
@@ -821,6 +827,7 @@ static int P5_Shape(lua_State *L) {
   vgAppendPath(paths[index],shapePaths[id]);
   if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
     flushPathByIndex(index);
+  return 0;
 }
 
 static int P5_ShapeMode(lua_State *L) {
