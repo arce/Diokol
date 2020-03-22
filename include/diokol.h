@@ -47,8 +47,8 @@ typedef int bool;
 #define false 0
 #define NIL -1
 
-#define PATH_SIZE 32
-#define MAX_SEGMENTS 1000
+#define PATH_SIZE 64
+#define MAX_SEGMENTS 500
 
 #define TRANSFORM 0
 #define STROKE_ATTR 1
