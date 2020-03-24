@@ -216,6 +216,12 @@ int32_t clearColor = 0xAAAAAAFF;
 
 lua_State *L;
 
+// hold the paths for basic shapes. Shapes that need a variable number
+// of segments are handled by common_path.
+static VGPath rect_path = VG_INVALID_HANDLE;
+//
+//
+
 void bail(lua_State *L, int error, char *msg){
   printf("\nFATAL ERROR:\n  %s: %s\n\n",msg, lua_tostring(L, -1));
   exit(1);
@@ -271,6 +277,7 @@ static int P5_NoLoop(lua_State *L) {
 static int P5_PopStyle(lua_State *L) {
     Context* temp = ctx;
     ctx = ctx->next;
+    
     style.attr[FILL_COLOR] = ctx->fillColor;
     style.attr[STROKE_COLOR] = ctx->strokeColor;
     props.attr[STROKE_WEIGHT] = ctx->strokeWeight;
@@ -580,6 +587,21 @@ static int _RoundRect(lua_State *L) {
     return 0;
 }
 
+static int _P5_Rect(VGfloat x, VGfloat y, VGfloat w, VGfloat h) {
+    const VGfloat coords[5] = {
+      luaL_checknumber(L, 1),
+      luaL_checknumber(L, 2),
+      luaL_checknumber(L, 3),
+      luaL_checknumber(L, 4),
+      -luaL_checknumber(L, 3),
+    };
+    //const VGfloat coords[5] = { x, y, w, h, -w };
+    vgModifyPathCoords(rect_path, 0, 4, coords);
+    //vgDrawPath(rect_path, VG_FILL_PATH | VG_STROKE_PATH);
+    vgDrawPath(rect_path, VG_STROKE_PATH);
+    return 0;
+}
+
 static int P5_Rect(lua_State *L) {
   if (lua_gettop(L)==5)
     return _RoundRect(L);
@@ -682,11 +704,11 @@ static int P5_StrokeWeight(lua_State *L) {
 
 VGPath shape_path = NULL;
 int kindShape;
-int pathSize;
+int pathSize = 0;
 
 static int P5_BeginShape(lua_State *L) {
     if (lua_gettop(L)==1)
-        kindShape = luaL_checknumber(L, 1);
+        kindShape = luaL_checkint(L, 1);
     else
         kindShape = P5_POLYLINE;
     if (shape_path==NULL)
@@ -1119,10 +1141,20 @@ static int P5_NoStroke(lua_State *L) {
     return 0;
 }
 
+static int _P5_Stroke(lua_State *L) {
+    VGfloat RGBA[5];
+    getArrColor(RGBA,Color(L));
+    vgSetParameteri(strokePaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
+    vgSetParameterfv(strokePaint, VG_PAINT_COLOR, 4, RGBA);
+    vgSetPaint(strokePaint, VG_STROKE_PATH);
+    return 0;
+}
+
 static int P5_Stroke(lua_State *L) {
     style.attr[STROKE_COLOR] = Color(L);
     return 0;
 }
+
 
 // Color Creating & Reading commands:
 // alpha()
@@ -1803,6 +1835,8 @@ static int P5_Smooth(lua_State *L) {
 
 // OpenVG functions
 
+int err_state = 0;
+
 void vg_init(int w,int h) {
 	VGfloat RGBA[4];
 	
@@ -1821,6 +1855,14 @@ void vg_init(int w,int h) {
 	  pathStyle[i].data = 0;
       pathProps[i].data = 0;
 	}
+    
+    rect_path =
+    vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F, 1.0f, 0.0f, 5, 5,
+                 VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_MODIFY);
+    if (rect_path == VG_INVALID_HANDLE)
+        err_state |= 1;
+    else
+        vguRect(rect_path, 0.0f, 0.0f, 1.0f, 1.0f);
     
     getArrColor(RGBA,clearColor);
 	vgSetfv(VG_CLEAR_COLOR, 4, RGBA);
@@ -1874,14 +1916,14 @@ static int _resetEvents() {
 }
 
 int drawScene() {
-    if (eventType!=NIL)
-        Dkl_ProcessEvent(eventType);
+ //   if (eventType!=NIL)
+ //       Dkl_ProcessEvent(eventType);
     if (loop&&initialized) {
         vg_call("draw");
         flushBuffers();
     }
-    eventType = NIL;
-    _resetEvents();
+ //   eventType = NIL;
+ //   _resetEvents();
 }
 
 static void create_array_type(lua_State* L) {
