@@ -133,10 +133,13 @@ int error;
 VGPaint strokePaint;
 VGPaint fillPaint;
 
-VGPath paths[PATH_SIZE];
-
-int mode[5] = {P5_CENTER,P5_CORNER,0,0,0}; // [0] = ellipse, [1] = rect, [2] = image, [3] = shape, [4] = text
-//int style[5] = {0,0,1,0xFF00FF00,0xFF000000}; // [0] = strokeJoin, [1] = strokeCap, [2] = strokeWeight, [3] = strokeColor, [4] = fillColor
+VGubyte rectMode;
+VGubyte ellipseMode;
+VGubyte shapeMode;
+VGubyte imageMode;
+VGubyte textMode;
+VGbitfield strokeEnable=0;
+VGbitfield fillEnable=0;
 
 VGImage images[100];
 int iWidth[100];
@@ -148,28 +151,7 @@ int imageCount = 0;
 int fontCount = 1;
 int imageId=0;
 
-union StyleUnion {
-  int32_t attr[2];
-  int64_t data;
-};
-
-union PropsUnion {
-  int16_t attr[4];
-  int64_t data;
-};
-
-union StyleUnion style;
-
-union PropsUnion props;
-
-VGfloat transform[9];
 VGfloat backup[9];
-
-union StyleUnion pathStyle[PATH_SIZE];
-
-union PropsUnion pathProps[PATH_SIZE];
-
-VGfloat pathTransform[PATH_SIZE][9];
 
 typedef struct Matrix {
     VGfloat data[9];
@@ -205,6 +187,7 @@ int mouseButton;
 bool done=false;
 bool loop=true;
 bool initialized=false;
+
 int frameCount = 0;
 
 VGint width=640, height=480;
@@ -219,8 +202,12 @@ lua_State *L;
 // hold the paths for basic shapes. Shapes that need a variable number
 // of segments are handled by common_path.
 static VGPath rect_path = VG_INVALID_HANDLE;
-//
-//
+static VGPath point_path = VG_INVALID_HANDLE;
+static VGPath line_path = VG_INVALID_HANDLE;
+static VGPath arc_path = VG_INVALID_HANDLE;
+static VGPath ellipse_path = VG_INVALID_HANDLE;
+static VGPath shape_path = VG_INVALID_HANDLE;
+static VGPath shape_paths[256] = {VG_INVALID_HANDLE};
 
 void bail(lua_State *L, int error, char *msg){
   printf("\nFATAL ERROR:\n  %s: %s\n\n",msg, lua_tostring(L, -1));
@@ -249,11 +236,12 @@ static void getArrColor(VGfloat* arr, VGuint color) {
 // time() -- Diököl extension
 
 typedef struct Context {
-    VGuint strokeColor;
     VGuint fillColor;
-    int strokeWeight;
+    VGuint strokeColor;
+    float strokeWeight;
     int strokeCap;
     int strokeJoin;
+    float strokeMiter;
     struct Context *next;
 } Context;
 
@@ -275,15 +263,16 @@ static int P5_NoLoop(lua_State *L) {
 }
 
 static int P5_PopStyle(lua_State *L) {
-    Context* temp = ctx;
+    Context* tmp = ctx;
     ctx = ctx->next;
     
-    style.attr[FILL_COLOR] = ctx->fillColor;
-    style.attr[STROKE_COLOR] = ctx->strokeColor;
-    props.attr[STROKE_WEIGHT] = ctx->strokeWeight;
-    props.attr[STROKE_CAP] = ctx->strokeCap;
-    props.attr[STROKE_JOIN] = ctx->strokeJoin;
-    free(temp);
+    vgSetColor(fillPaint, ctx->fillColor);
+    vgSetColor(strokePaint, ctx->strokeColor);
+    vgSetf(VG_STROKE_LINE_WIDTH, ctx->strokeWeight);
+    vgSeti(VG_STROKE_CAP_STYLE, ctx->strokeCap);
+    vgSeti(VG_STROKE_JOIN_STYLE, ctx->strokeJoin);
+    vgSetf(VG_STROKE_MITER_LIMIT, ctx->strokeMiter);
+    free(tmp);
     return 0;
 }
 
@@ -292,11 +281,12 @@ static int P5_PushStyle(lua_State *L) {
     tmp = malloc(sizeof(Context));
     memset(tmp,0,sizeof(Context));
     
-    tmp->fillColor = style.attr[FILL_COLOR];
-    tmp->strokeColor = style.attr[STROKE_COLOR];
-    tmp->strokeWeight = props.attr[STROKE_WEIGHT];
-    tmp->strokeCap = props.attr[STROKE_CAP];
-    tmp->strokeJoin = props.attr[STROKE_JOIN];
+    tmp->fillColor = vgGetColor(fillPaint);
+    tmp->strokeColor = vgGetColor(strokePaint);
+    tmp->strokeWeight = vgGetf(VG_STROKE_LINE_WIDTH);
+    tmp->strokeCap = vgGeti(VG_STROKE_CAP_STYLE);
+    tmp->strokeJoin = vgGeti(VG_STROKE_JOIN_STYLE);
+    tmp->strokeMiter = vgGetf(VG_STROKE_MITER_LIMIT);
     tmp->next = ctx;
     ctx = tmp;
     return 0;
@@ -373,64 +363,32 @@ static int P5_Width(lua_State *L) {
 // square()
 // triangle
 
-static void flushPathByIndex(int index) {
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)==0) return;
-  VGfloat RGBA[4];
-  if (pathProps[index].attr[TRANSFORM]!=0) {
-    vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
-    vgGetMatrix(backup);
-    vgLoadMatrix(pathTransform[index]);
-  }
-  if (pathProps[index].attr[STROKE_WEIGHT]!=0)
-    vgSetf(VG_STROKE_LINE_WIDTH, pathProps[index].attr[STROKE_WEIGHT]);
-  if (pathProps[index].attr[STROKE_CAP]!=0)
-    vgSeti(VG_STROKE_CAP_STYLE, pathProps[index].attr[STROKE_CAP]);
-  if (pathProps[index].attr[STROKE_JOIN]!=0)
-    vgSeti(VG_STROKE_JOIN_STYLE, pathProps[index].attr[STROKE_JOIN]);
-  if (pathStyle[index].attr[FILL_COLOR]!=0) {
-	getArrColor(RGBA,pathStyle[index].attr[FILL_COLOR]);
-	vgSetParameteri(fillPaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
-    vgSetParameterfv(fillPaint, VG_PAINT_COLOR, 4, RGBA);
-    vgSetPaint(fillPaint, VG_FILL_PATH);
-    vgDrawPath(paths[index], VG_FILL_PATH);
-  }
-  if (pathStyle[index].attr[STROKE_COLOR]!=0) {
-	getArrColor(RGBA,pathStyle[index].attr[STROKE_COLOR]);
-	vgSetParameteri(strokePaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
-    vgSetParameterfv(strokePaint, VG_PAINT_COLOR, 4, RGBA);
-    vgSetPaint(strokePaint, VG_STROKE_PATH);
-    vgDrawPath(paths[index], VG_STROKE_PATH);
-  }
-  if (pathProps[index].attr[TRANSFORM]!=0)
-    vgLoadMatrix(backup);
-  vgClearPath(paths[index], VG_PATH_CAPABILITY_APPEND_TO);
-}
+static void createPaths() {
+    
+  VGbitfield capabilites = VG_PATH_CAPABILITY_APPEND_TO |
+                           VG_PATH_CAPABILITY_MODIFY;
+    
+  rect_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+      1.0f, 0.0f, 5, 5, capabilites);
+  vguRect(rect_path, 0.0f, 0.0f, 1.0f, 1.0f);
 
-int next=0;
+  point_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 5, 5, capabilites);
+  vguRect(point_path, 0.0f, 0.0f, 1.0f, 1.0f);
 
-static int findIndex() {
-  int i = 0;
-  for (; i<PATH_SIZE; i++) {
-    if ((pathStyle[i].data==0) ||
-        ((pathStyle[i].data==style.data) &&
-         (pathProps[i].data==props.data))) {
-      if ((pathProps[i].attr[TRANSFORM]!=0) && (memcmp(pathTransform[i],transform,sizeof(transform))!=0))
-          continue;
-      pathStyle[i].data = style.data;
-      pathProps[i].data = props.data;
-      if (props.attr[TRANSFORM]!=0)
-        memcpy(pathTransform[i],transform,sizeof(transform));
-      return i;
-    }
-  }
-  flushPathByIndex(next);
-  pathStyle[next].data = style.data;
-  pathProps[next].data = props.data;
-  if (props.attr[TRANSFORM]!=0)
-    memcpy(pathTransform[next],transform,sizeof(transform));
-  next++;
-  next = (next==PATH_SIZE)?0:next;
-  return next;
+  line_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 4, 4, capabilites);
+  vguLine(line_path, 0.0f, 0.0f, 1.0f, 1.0f);
+
+  ellipse_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 4, 4, capabilites);
+  vguEllipse(ellipse_path, 0.0f, 0.0f, 1.0f, 1.0f);
+  
+  arc_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 4, 4, capabilites);
+
+  shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 4, 4, capabilites);
 }
 
 static int P5_Arc(lua_State *L) {
@@ -442,6 +400,7 @@ static int P5_Arc(lua_State *L) {
     b = luaL_checknumber(L, 4);
     start = _deg(luaL_checknumber(L, 5));
     stop = _deg(luaL_checknumber(L, 6));
+    
     if (lua_gettop(L) == 7)
         type = luaL_checkint(L, 7);
     else
@@ -452,49 +411,57 @@ static int P5_Arc(lua_State *L) {
         arcType = VGU_ARC_CHORD;
     else if (type == P5_OPEN)
         arcType = VGU_ARC_OPEN;
-    int index = findIndex();
     
-    switch (mode[ELLIPSE]) {
+    vgClearPath(arc_path, VG_PATH_CAPABILITY_APPEND_TO);
+    switch (ellipseMode) {
       case P5_CORNERS:
-        vguArc(paths[index],(x+a)/2,(y+b)/2, a-x, b-y,start,stop-start,arcType);
+        vguArc(arc_path,(x+a)/2.0f,(y+b)/2.0f, a-x, b-y,start,stop-start,arcType);
         break;
       case P5_CENTER:
-        vguArc(paths[index],x,y,a,b,start,stop-start,arcType);
+        vguArc(arc_path,x,y,a,b,start,stop-start,arcType);
         break;
       case P5_RADIUS:
-        vguArc(paths[index],x,y,a*2,b*2,start,stop-start,arcType);
+        vguArc(arc_path,x,y,a*2.0f,b*2.0f,start,stop-start,arcType);
         break;
       case P5_CORNER:
-        vguArc(paths[index],x+a/2,y+b/2,a,b,start,stop-start,arcType);
+        vguArc(arc_path,x+a/2.0f,y+b/2.0f,a,b,start,stop-start,arcType);
         break;
     }
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
+    
+    vgDrawPath(arc_path, fillEnable | strokeEnable);
     return 0;
 }
 
 static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
-    switch (mode[ELLIPSE]) {
+    switch (ellipseMode) {
+        case P5_CENTER:
+            break;
         case P5_CORNER:
-            a = a + c/2;
-            b = b + d/2;
+            a = a + c / 2.0f;
+            b = b + d / 2.0f;
             break;
         case P5_CORNERS:
-            a = (a + c)/2 ;
-            b = (b + d)/2;
-            c = (c - a)*2;
-            d = (d - b)*2;
+            a = (a + c) / 2.0f ;
+            b = (b + d) / 2.0f;
+            c = (c - a) * 2.0f;
+            d = (d - b) * 2.0f;
             break;
         case P5_RADIUS:
-            c = c*2;
-            d = d*2;
+            c = c * 2.0f;
+            d = d * 2.0f;
             break;
-    }
+    };
     
-    int index = findIndex();
-    vguEllipse(paths[index],a,b,c,d);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
+    const VGfloat coords[12] = {
+        a + c/2.0f, b,
+        c/2.0f, d/2.0f, 0.0f, -c, 0.0f,
+        c/2.0f, d/2.0f, 0.0f,  c, 0.0f
+    };
+    
+    vgModifyPathCoords(ellipse_path, 0, 3, coords);
+    
+    vgDrawPath(ellipse_path, fillEnable | strokeEnable);
+    
     return 0;
 }
 
@@ -507,7 +474,6 @@ static int P5_Circle(lua_State *L) {
 }
 
 static int P5_Ellipse(lua_State *L) {
-    
     VGfloat a = luaL_checknumber(L, 1);
     VGfloat b = luaL_checknumber(L, 2);
     VGfloat c = luaL_checknumber(L, 3);
@@ -517,148 +483,68 @@ static int P5_Ellipse(lua_State *L) {
 }
 
 static int P5_Line(lua_State *L) {
+    const VGfloat coords[4] = {
+      luaL_checknumber(L, 1),
+      luaL_checknumber(L, 2),
+      luaL_checknumber(L, 3),
+      luaL_checknumber(L, 4)
+    };
     
-    VGfloat a = luaL_checknumber(L, 1);
-    VGfloat b = luaL_checknumber(L, 2);
-    VGfloat c = luaL_checknumber(L, 3);
-    VGfloat d = luaL_checknumber(L, 4);
-    
-    int index = findIndex();
-    vguLine(paths[index],a,b,c,d);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
+    vgModifyPathCoords(line_path, 0, 2, coords);
+    vgDrawPath(line_path, fillEnable | strokeEnable);
     return 0;
 }
 
 static int P5_Point(lua_State *L) {
-    VGfloat x = luaL_checknumber(L, 1);
-    VGfloat y = luaL_checknumber(L, 2);
-    
-    int index = findIndex();
-    vguEllipse(paths[index],x-2,y-2,4,4);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
-    return 0;
-}
-
-static int P5_Quad(lua_State *L) {
-    const VGfloat coords[8] = {
-        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
-        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
-        luaL_checknumber(L, 5),luaL_checknumber(L, 6),
-        luaL_checknumber(L, 7),luaL_checknumber(L, 8)
+    const VGfloat coords[9] = {
+        1.0f,0.0f,luaL_checknumber(L, 1),
+        0.0f,1.0f,luaL_checknumber(L, 2),
+        0.0f,0.0f,1.0f
     };
-    int index = findIndex();
-    vguPolygon(paths[index],coords,8,true);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
+    
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(backup);
+    vgMultMatrix(coords);
+    if (strokeEnable)
+        vgDrawPath(point_path, VG_STROKE_PATH);
+    vgLoadMatrix(backup);
     return 0;
 }
 
-static int _RoundRect(lua_State *L) {
-    
-    VGfloat x,y,a,b,r1,r2;
-    x = luaL_checknumber(L, 1);
-    y = luaL_checknumber(L, 2);
-    a = luaL_checknumber(L, 3);
-    b = luaL_checknumber(L, 4);
-    r1 = r2 = luaL_checknumber(L, 5);
-    if (lua_gettop(L)==6)
-        r2 = luaL_checknumber(L, 6);
-    
-    int index = findIndex();
-    switch (mode[RECT]) {
-        case P5_CORNER:
-            vguRoundRect(paths[index], x, y, a, b,r1,r2);
-            break;
-        case P5_CENTER:
-            vguRoundRect(paths[index], x-a/2, y-b/2, a, b,r1,r2);
-            break;
-        case P5_RADIUS:
-            vguRoundRect(paths[index], x-a/2, y-b/2, a/2, b/2,r1,r2);
-            break;
-        case P5_CORNERS:
-            vguRoundRect(paths[index], x, y, x+a, y+b,r1,r2);
-            break;
-    }
-    
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
-    return 0;
-}
-
-static int _P5_Rect(VGfloat x, VGfloat y, VGfloat w, VGfloat h) {
-    const VGfloat coords[5] = {
+static int P5_Rect(VGfloat x, VGfloat y, VGfloat w, VGfloat h) {
+     VGfloat coords[5] = {
       luaL_checknumber(L, 1),
       luaL_checknumber(L, 2),
       luaL_checknumber(L, 3),
       luaL_checknumber(L, 4),
       -luaL_checknumber(L, 3),
     };
-    //const VGfloat coords[5] = { x, y, w, h, -w };
-    vgModifyPathCoords(rect_path, 0, 4, coords);
-    //vgDrawPath(rect_path, VG_FILL_PATH | VG_STROKE_PATH);
-    vgDrawPath(rect_path, VG_STROKE_PATH);
-    return 0;
-}
-
-static int P5_Rect(lua_State *L) {
-  if (lua_gettop(L)==5)
-    return _RoundRect(L);
     
-  VGfloat a = luaL_checknumber(L, 1);
-  VGfloat b = luaL_checknumber(L, 2);
-  VGfloat c = luaL_checknumber(L, 3);
-  VGfloat d = luaL_checknumber(L, 4);
-  
-  switch (mode[RECT]) {
-    case P5_CORNERS:
-	  c =  c - a;
-	  d =  d - b;
-      break;
-    case P5_CENTER:
-	  a = a - c/2;
-	  b = b - d/2;
-      break;
-    case P5_RADIUS:
-	  a = a - c;
-	  b = b - d;
-	  c = c*2;
-	  d = d*2;
-      break;
-  }
-  
-  int index = findIndex();
-  vguRect(paths[index],a,b,c,d);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-    flushPathByIndex(index);
-  return 0;
-}
-
-static int P5_Square(lua_State *L) {
-    const VGfloat coords[8] = {
-        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
-        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
-        luaL_checknumber(L, 5),luaL_checknumber(L, 6)
+    switch (rectMode) {
+        case P5_CORNER:
+            break;
+        case P5_CORNERS:
+            coords[2] =  coords[2] - coords[0];
+            coords[3] =  coords[3] - coords[1];
+            coords[5] = - coords[2];
+            break;
+        case P5_CENTER:
+            coords[0] = coords[0] - coords[2]/2;
+            coords[1] = coords[1] - coords[3]/2;
+            break;
+        case P5_RADIUS:
+            coords[0] = coords[0] - coords[2];
+            coords[1] = coords[1] - coords[3];
+            coords[2] = coords[2] * 2;
+            coords[3] = coords[3] * 2;
+            coords[5] = - coords[2];
+            break;
     };
-    int index = findIndex();
-    vguPolygon(paths[index],coords,6,true);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
+    
+    vgModifyPathCoords(rect_path, 0, 4, coords);
+    
+    vgDrawPath(rect_path, fillEnable | strokeEnable);
     return 0;
-}
-
-static int P5_Triangle(lua_State *L) {
-  const VGfloat coords[8] = {
-        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
-        luaL_checknumber(L, 3),luaL_checknumber(L, 4),
-        luaL_checknumber(L, 5),luaL_checknumber(L, 6)
-  };
-  int index = findIndex();
-  vguPolygon(paths[index],coords,6,true);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-    flushPathByIndex(index);
-  return 0;
 }
 
 // Attributes:
@@ -667,29 +553,35 @@ static int P5_Triangle(lua_State *L) {
 // strokeCap()
 // strokeJoin()
 // strokeWeight()
+// strokeMiter()
 
 static int P5_EllipseMode(lua_State *L) {
-    mode[ELLIPSE] = luaL_checkint(L, 1);
+    ellipseMode = luaL_checkint(L, 1);
     return 0;
 }
 
 static int P5_RectMode(lua_State *L) {
-    mode[RECT] = luaL_checkint(L, 1);
+    rectMode = luaL_checkint(L, 1);
     return 0;
 }
 
 static int P5_StrokeCap(lua_State *L) {
-    props.attr[STROKE_CAP] = luaL_checkint(L, 1);
+    vgSeti(VG_STROKE_CAP_STYLE, luaL_checkint(L, 1));
     return 0;
 }
 
 static int P5_StrokeJoin(lua_State *L) {
-    props.attr[STROKE_JOIN] = luaL_checkint(L, 1);
+    vgSeti(VG_STROKE_JOIN_STYLE, luaL_checkint(L, 1));
     return 0;
 }
 
 static int P5_StrokeWeight(lua_State *L) {
-    props.attr[STROKE_WEIGHT] = luaL_checkint(L, 1);
+    vgSetf(VG_STROKE_LINE_WIDTH, luaL_checknumber(L, 1));
+    return 0;
+}
+
+static int P5_StrokeMiter(lua_State *L) {
+    vgSetf(VG_STROKE_MITER_LIMIT, luaL_checkint(L, 1));
     return 0;
 }
 
@@ -702,7 +594,6 @@ static int P5_StrokeWeight(lua_State *L) {
 // quadraticVertex()
 // vertex()
 
-VGPath shape_path = NULL;
 int kindShape;
 int pathSize = 0;
 
@@ -711,10 +602,7 @@ static int P5_BeginShape(lua_State *L) {
         kindShape = luaL_checkint(L, 1);
     else
         kindShape = P5_POLYLINE;
-    if (shape_path==NULL)
-      shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,1.0f,0.0f,0,0,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_APPEND_FROM);
-    else
-      vgClearPath(shape_path,VG_PATH_CAPABILITY_APPEND_FROM | VG_PATH_CAPABILITY_APPEND_TO);
+    shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,1.0f,0.0f,0,0,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_APPEND_FROM);
     pathSize = 0;
     return 0;
 }
@@ -741,11 +629,7 @@ static int P5_EndShape(lua_State *L) {
         VGfloat data = 0.0f;
         vgAppendPathData(shape_path, 1, &seg, &data);
     }
-    int index = findIndex();
-    vgAppendPath(paths[index],shape_path);
-    if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-        flushPathByIndex(index);
-    shape_path = NULL;
+    vgDrawPath(shape_path, fillEnable | strokeEnable);
     return 0;
 }
 
@@ -837,23 +721,29 @@ static int P5_SaveShape(lua_State *L) {
 
 static int P5_Shape(lua_State *L) {
   int id = luaL_checkint(L, 1);
-  float x = luaL_checknumber(L,2);
-  float y = luaL_checknumber(L,3);
-  double sx = 1;
-  double sy = 1;
+  VGfloat sx = 1;
+  VGfloat sy = 1;
   if (lua_gettop(L) == 5) {
     sx = luaL_checknumber(L,4);
     sy = luaL_checknumber(L,5);
   }
-  int index = findIndex();
-  vgAppendPath(paths[index],shapePaths[id]);
-  if (vgGetParameteri(paths[index],VG_PATH_NUM_SEGMENTS)>MAX_SEGMENTS-10)
-    flushPathByIndex(index);
+    
+  const VGfloat coords[9] = {
+        sx,0.0f,luaL_checknumber(L,2),
+        0.0f,sy,luaL_checknumber(L,3),
+        0.0f,0.0f,1.0f
+  };
+
+  vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+  vgGetMatrix(backup);
+  vgMultMatrix(coords);
+  vgDrawPath(shape_paths[id], fillEnable | strokeEnable);
+  vgLoadMatrix(backup);
   return 0;
 }
 
 static int P5_ShapeMode(lua_State *L) {
-    mode[SHAPE] = luaL_checkint(L, 1);
+    shapeMode = luaL_checkint(L, 1);
     return 0;
 }
 
@@ -1094,7 +984,7 @@ static int P5_Translate(lua_State *L) {
 // stroke()
 
 static VGuint Color(lua_State *L) {
-    VGuint r,g,b,a;
+    int r,g,b,a;
     if (lua_gettop(L)==1) {
         r = g = b = luaL_checkint(L, 1);
         if (r>255) return r;
@@ -1113,48 +1003,41 @@ static VGuint Color(lua_State *L) {
         b = luaL_checkint(L, 3);
         a = luaL_checkint(L, 4);
     }
-    return ((r & 0xff) << 24) + ((g & 0xff) << 16) +
-    ((b & 0xff) << 8) + (a & 0xff);
+    return (r << 24) | (g << 16) | (b << 8) | a;
 }
 
 static int P5_Background(lua_State *L) {
-    VGfloat RGBA[4];
-    getArrColor(RGBA,Color(L));
-    vgSetfv(VG_CLEAR_COLOR, 4, RGBA);
-    vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
+    VGfloat rgba[4];
+    getArrColor(rgba,Color(L));
+    vgSeti(VG_SCISSORING, VG_FALSE);
+    vgSetfv(VG_CLEAR_COLOR, 4, rgba);
     vgClear(0,0,width,height);
     return 0;
 }
 
 static int P5_Fill(lua_State *L) {
-    style.attr[FILL_COLOR] = Color(L);
+    vgSetColor(fillPaint,Color(L));
+    vgSetPaint(fillPaint,VG_STROKE_PATH);
+    fillEnable = VG_STROKE_PATH;
     return 0;
 }
 
 static int P5_NoFill(lua_State *L) {
-    style.attr[FILL_COLOR] = 0;
+    fillEnable = 0;
     return 0;
 }
 
 static int P5_NoStroke(lua_State *L) {
-    style.attr[STROKE_COLOR] = 0;
-    return 0;
-}
-
-static int _P5_Stroke(lua_State *L) {
-    VGfloat RGBA[5];
-    getArrColor(RGBA,Color(L));
-    vgSetParameteri(strokePaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
-    vgSetParameterfv(strokePaint, VG_PAINT_COLOR, 4, RGBA);
-    vgSetPaint(strokePaint, VG_STROKE_PATH);
+    strokeEnable = 0;
     return 0;
 }
 
 static int P5_Stroke(lua_State *L) {
-    style.attr[STROKE_COLOR] = Color(L);
+    vgSetColor(strokePaint,Color(L));
+    vgSetPaint(strokePaint,VG_STROKE_PATH);
+    strokeEnable = VG_FILL_PATH;
     return 0;
 }
-
 
 // Color Creating & Reading commands:
 // alpha()
@@ -1282,7 +1165,7 @@ static int P5_Image(lua_State *L) {
     }
     vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
     vgGetMatrix(matrix);
-    switch (mode[IMAGE]) {
+    switch (imageMode) {
         case P5_CENTER:
             x = x - w/2;
             y = y - h/2;
@@ -1302,7 +1185,7 @@ static int P5_Image(lua_State *L) {
 }
 
 static int P5_ImageMode(lua_State *L) {
-    mode[IMAGE] = luaL_checkint(L, 1);
+    imageMode = luaL_checkint(L, 1);
     return 0;
 }
 
@@ -1654,9 +1537,10 @@ static int P5_Text(lua_State *L) {
     }
     VG_GLYPH_ORIGIN[0] = 0;
     VG_GLYPH_ORIGIN[1] = 0;
-    VGfloat matrix[9];
+
     vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
-    vgGetMatrix(matrix);
+    vgGetMatrix(backup);
+    
     vgTranslate(x,y);
     vgScale(fSize[fontId]/10.0f,-fSize[fontId]/10.0f);
     
@@ -1665,7 +1549,7 @@ static int P5_Text(lua_State *L) {
     }
     //    for (i=0;i<strlen(str);i++)
     //        vgDrawGlyph(fonts[fontId],str[i],VG_STROKE_PATH,false);
-    vgLoadMatrix(matrix);
+    vgLoadMatrix(backup);
     return 0;
 }
 
@@ -1814,18 +1698,8 @@ static int P5_Radians(lua_State *L) {
     return 1;
 }
 
-static void flushBuffers() {
-  for (int i=0; i<PATH_SIZE; i++)
-    flushPathByIndex(i);
-}
-
-static int P5_Flush(lua_State *L) {
-  flushBuffers();
-  return 0;
-}
-
 static int P5_TextMode(lua_State *L) {
-  mode[TEXT] = luaL_checkint(L, 1);
+  textMode = luaL_checkint(L, 1);
   return 0;
 }
 
@@ -1846,23 +1720,8 @@ void vg_init(int w,int h) {
 
 	fillPaint = vgCreatePaint();
 	vgSetParameteri(fillPaint, VG_PAINT_TYPE, VG_PAINT_TYPE_COLOR);
-	
-    style.data = 0;
-    props.data = 0;
     
-	for (int i=0; i<PATH_SIZE; i++) {
-	  paths[i] = vgCreatePath(VG_PATH_FORMAT_STANDARD,VG_PATH_DATATYPE_F,1.0f,0.0f,MAX_SEGMENTS,6,VG_PATH_CAPABILITY_APPEND_TO);
-	  pathStyle[i].data = 0;
-      pathProps[i].data = 0;
-	}
-    
-    rect_path =
-    vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F, 1.0f, 0.0f, 5, 5,
-                 VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_MODIFY);
-    if (rect_path == VG_INVALID_HANDLE)
-        err_state |= 1;
-    else
-        vguRect(rect_path, 0.0f, 0.0f, 1.0f, 1.0f);
+    createPaths();
     
     getArrColor(RGBA,clearColor);
 	vgSetfv(VG_CLEAR_COLOR, 4, RGBA);
@@ -1872,17 +1731,18 @@ void vg_init(int w,int h) {
 }
 
 void vg_call(char *fn_name) {
+    const VGfloat reset[] = {
+        1,1,0,
+        1,-1,-height,
+        0,0,1
+    };
 	lua_getglobal(L,fn_name);
 
 	vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
-	vgLoadIdentity();
-	vgScale(1,-1);
-	vgTranslate(0,-height);
+    vgLoadMatrix(reset);
 
 	vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
-	vgLoadIdentity();
-	vgScale(1,-1);
-	vgTranslate(0,-height);
+	vgLoadMatrix(reset);
 
 	if ((error = lua_pcall(L, 0, 0, 0)))			
 		bail(L, error, "Error running script\n");
@@ -1890,19 +1750,20 @@ void vg_call(char *fn_name) {
 }
 
 void vg_resize(int w, int h) {
-	width = w;
-	height = h;
+    width = w;
+    height = h;
+    const VGfloat reset[] = {
+        1,1,0,
+        1,-1,-height,
+        0,0,1
+    };
 	vgResizeSurfaceSH(w,h);
 
 	vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
-	vgLoadIdentity();
-	vgScale(1,-1);
-	vgTranslate(0,-height);
+	vgLoadMatrix(reset);
 
 	vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
-	vgLoadIdentity();
-	vgScale(1,-1);
-	vgTranslate(0,-height);
+	vgLoadMatrix(reset);
 }
 
 static int _resetEvents() {
@@ -1916,14 +1777,13 @@ static int _resetEvents() {
 }
 
 int drawScene() {
- //   if (eventType!=NIL)
- //       Dkl_ProcessEvent(eventType);
+    if (eventType!=NIL)
+        Dkl_ProcessEvent(eventType);
     if (loop&&initialized) {
         vg_call("draw");
-        flushBuffers();
     }
- //   eventType = NIL;
- //   _resetEvents();
+    eventType = NIL;
+    _resetEvents();
 }
 
 static void create_array_type(lua_State* L) {
@@ -2143,14 +2003,8 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     lua_pushcfunction(L,P5_Point);
     lua_setglobal(L,"point");
     
-    lua_pushcfunction(L,P5_Quad);
-    lua_setglobal(L,"quad");
-    
     lua_pushcfunction(L,P5_Rect);
     lua_setglobal(L,"rect");
-    
-    lua_pushcfunction(L,P5_Triangle);
-    lua_setglobal(L,"triangle");
     
     lua_pushcfunction(L,P5_EllipseMode);
     lua_setglobal(L,"ellipseMode");
