@@ -266,8 +266,9 @@ static int P5_PopStyle(lua_State *L) {
     Context* tmp = ctx;
     ctx = ctx->next;
     
-    vgSetColor(fillPaint, ctx->fillColor);
-    vgSetColor(strokePaint, ctx->strokeColor);
+    vgSetParameterfv(fillPaint, VG_PAINT_COLOR, 4, ctx->fillColor);
+    vgSetParameterfv(strokePaint, VG_PAINT_COLOR, 4, ctx->strokeColor);
+    
     vgSetf(VG_STROKE_LINE_WIDTH, ctx->strokeWeight);
     vgSeti(VG_STROKE_CAP_STYLE, ctx->strokeCap);
     vgSeti(VG_STROKE_JOIN_STYLE, ctx->strokeJoin);
@@ -1017,8 +1018,8 @@ static int P5_Background(lua_State *L) {
 
 static int P5_Fill(lua_State *L) {
     vgSetColor(fillPaint,Color(L));
-    vgSetPaint(fillPaint,VG_STROKE_PATH);
-    fillEnable = VG_STROKE_PATH;
+    vgSetPaint(fillPaint,VG_FILL_PATH);
+    fillEnable = VG_FILL_PATH;
     return 0;
 }
 
@@ -1035,7 +1036,7 @@ static int P5_NoStroke(lua_State *L) {
 static int P5_Stroke(lua_State *L) {
     vgSetColor(strokePaint,Color(L));
     vgSetPaint(strokePaint,VG_STROKE_PATH);
-    strokeEnable = VG_FILL_PATH;
+    strokeEnable = VG_STROKE_PATH;
     return 0;
 }
 
@@ -1732,9 +1733,9 @@ void vg_init(int w,int h) {
 
 void vg_call(char *fn_name) {
     const VGfloat reset[] = {
-        1,1,0,
-        1,-1,-height,
-        0,0,1
+        1.0f,0.0f,0.0f,
+        0.0f,-1.0f,0.0f,
+        0.0f,height,1.0f
     };
 	lua_getglobal(L,fn_name);
 
@@ -1753,9 +1754,9 @@ void vg_resize(int w, int h) {
     width = w;
     height = h;
     const VGfloat reset[] = {
-        1,1,0,
-        1,-1,-height,
-        0,0,1
+        1.0f,0.0f,0.0f,
+        0.0f,-1.0f,0.0f,
+        0.0f,height,1.0f
     };
 	vgResizeSurfaceSH(w,h);
 
