@@ -133,13 +133,16 @@ int error;
 VGPaint strokePaint;
 VGPaint fillPaint;
 
-VGubyte rectMode;
-VGubyte ellipseMode;
-VGubyte shapeMode;
-VGubyte imageMode;
+VGubyte rectMode = P5_CORNER;
+VGubyte ellipseMode = P5_CENTER;
+VGubyte shapeMode = P5_CORNER;
+VGubyte imageMode = P5_CORNER;
 VGubyte textMode;
 VGbitfield strokeEnable=0;
 VGbitfield fillEnable=0;
+
+VGuint strokeColor;
+VGuint fillColor;
 
 VGImage images[100];
 int iWidth[100];
@@ -207,7 +210,7 @@ static VGPath line_path = VG_INVALID_HANDLE;
 static VGPath arc_path = VG_INVALID_HANDLE;
 static VGPath ellipse_path = VG_INVALID_HANDLE;
 static VGPath shape_path = VG_INVALID_HANDLE;
-static VGPath shape_paths[256] = {VG_INVALID_HANDLE};
+static VGPath shape_paths[100] = {VG_INVALID_HANDLE};
 
 void bail(lua_State *L, int error, char *msg){
   printf("\nFATAL ERROR:\n  %s: %s\n\n",msg, lua_tostring(L, -1));
@@ -370,7 +373,7 @@ static void createPaths() {
                            VG_PATH_CAPABILITY_MODIFY;
     
   rect_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-      1.0f, 0.0f, 5, 5, capabilites);
+    1.0f, 0.0f, 5, 5, capabilites);
   vguRect(rect_path, 0.0f, 0.0f, 1.0f, 1.0f);
 
   point_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
@@ -388,8 +391,8 @@ static void createPaths() {
   arc_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
     1.0f, 0.0f, 4, 4, capabilites);
 
-  shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-    1.0f, 0.0f, 4, 4, capabilites);
+  //shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+   // 1.0f, 0.0f, 4, 4, capabilites | VG_PATH_CAPABILITY_APPEND_FROM);
 }
 
 static int P5_Arc(lua_State *L) {
@@ -413,7 +416,7 @@ static int P5_Arc(lua_State *L) {
     else if (type == P5_OPEN)
         arcType = VGU_ARC_OPEN;
     
-    vgClearPath(arc_path, VG_PATH_CAPABILITY_APPEND_TO);
+    vgClearPath(arc_path, VG_PATH_CAPABILITY_APPEND_TO  | VG_PATH_CAPABILITY_MODIFY);
     switch (ellipseMode) {
       case P5_CORNERS:
         vguArc(arc_path,(x+a)/2.0f,(y+b)/2.0f, a-x, b-y,start,stop-start,arcType);
@@ -603,7 +606,8 @@ static int P5_BeginShape(lua_State *L) {
         kindShape = luaL_checkint(L, 1);
     else
         kindShape = P5_POLYLINE;
-    shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,1.0f,0.0f,0,0,VG_PATH_CAPABILITY_APPEND_TO | VG_PATH_CAPABILITY_APPEND_FROM);
+    shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+      1.0f, 0.0f, 4, 4, VG_PATH_CAPABILITY_APPEND_TO);
     pathSize = 0;
     return 0;
 }
@@ -704,41 +708,27 @@ static int P5_Vertex(lua_State *L) {
 // shapeMode()
 
 int pathId=0;
-VGPath shapePaths[255];
 
 static int P5_SaveShape(lua_State *L) {
-    VGubyte seg;
+    VGubyte seg = -1;
     if (lua_gettop(L)==1) {
-        seg = luaL_checknumber(L, 1);
+        seg = VG_CLOSE_PATH;
         VGfloat data = 0.0f;
         vgAppendPathData(shape_path, 1, &seg, &data);
     }
-    shapePaths[pathId] = shape_path;
-    shape_path = NULL;
-    lua_pushnumber(L, pathId);
     pathId++;
+    shape_paths[pathId] = shape_path;
+    lua_pushnumber(L, pathId);
     return 1;
 }
 
 static int P5_Shape(lua_State *L) {
-  int id = luaL_checkint(L, 1);
-  VGfloat sx = 1;
-  VGfloat sy = 1;
-  if (lua_gettop(L) == 5) {
-    sx = luaL_checknumber(L,4);
-    sy = luaL_checknumber(L,5);
-  }
-    
-  const VGfloat coords[9] = {
-        sx,0.0f,luaL_checknumber(L,2),
-        0.0f,sy,luaL_checknumber(L,3),
-        0.0f,0.0f,1.0f
-  };
-
+  int pid = luaL_checkint(L, 1);
   vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
   vgGetMatrix(backup);
-  vgMultMatrix(coords);
-  vgDrawPath(shape_paths[id], fillEnable | strokeEnable);
+  vgTranslate(luaL_checknumber(L,2),luaL_checknumber(L,3));
+  vgScale(1.0f,1.0f);
+  vgDrawPath(shape_paths[pid], fillEnable | strokeEnable);
   vgLoadMatrix(backup);
   return 0;
 }
@@ -761,7 +751,6 @@ static int P5_ShapeMode(lua_State *L) {
 // mouseY
 // pmouseX
 // pmouseY
-
 
 static int P5_MouseButton(lua_State *L) {
     lua_pushnumber(L,mouseButton);
@@ -985,7 +974,7 @@ static int P5_Translate(lua_State *L) {
 // stroke()
 
 static VGuint Color(lua_State *L) {
-    int r,g,b,a;
+    VGuint r,g,b,a;
     if (lua_gettop(L)==1) {
         r = g = b = luaL_checkint(L, 1);
         if (r>255) return r;
@@ -1017,23 +1006,31 @@ static int P5_Background(lua_State *L) {
 }
 
 static int P5_Fill(lua_State *L) {
-    vgSetColor(fillPaint,Color(L));
+    VGuint rgba = Color(L);
+    if (rgba == fillColor) return 0;
+    fillColor = rgba;
+    vgSetColor(fillPaint,fillColor);
     vgSetPaint(fillPaint,VG_FILL_PATH);
     fillEnable = VG_FILL_PATH;
     return 0;
 }
 
 static int P5_NoFill(lua_State *L) {
+    fillColor = 0;
     fillEnable = 0;
     return 0;
 }
 
 static int P5_NoStroke(lua_State *L) {
+    strokeColor = 0;
     strokeEnable = 0;
     return 0;
 }
 
 static int P5_Stroke(lua_State *L) {
+    VGuint rgba = Color(L);
+    if (rgba == strokeColor) return 0;
+    strokeColor = rgba;
     vgSetColor(strokePaint,Color(L));
     vgSetPaint(strokePaint,VG_STROKE_PATH);
     strokeEnable = VG_STROKE_PATH;
