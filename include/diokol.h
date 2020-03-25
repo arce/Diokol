@@ -501,9 +501,8 @@ static int P5_Line(lua_State *L) {
 
 static int P5_Point(lua_State *L) {
     const VGfloat coords[9] = {
-        1.0f,0.0f,luaL_checknumber(L, 1),
-        0.0f,1.0f,luaL_checknumber(L, 2),
-        0.0f,0.0f,1.0f
+        1.0f,0.0f,0.0f,0.0f,1.0f,0.0f,
+        luaL_checknumber(L, 1),luaL_checknumber(L, 2),1.0f
     };
     
     vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
@@ -517,10 +516,8 @@ static int P5_Point(lua_State *L) {
 
 static int P5_Rect(VGfloat x, VGfloat y, VGfloat w, VGfloat h) {
      VGfloat coords[5] = {
-      luaL_checknumber(L, 1),
-      luaL_checknumber(L, 2),
-      luaL_checknumber(L, 3),
-      luaL_checknumber(L, 4),
+      luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+      luaL_checknumber(L, 3),luaL_checknumber(L, 4),
       -luaL_checknumber(L, 3),
     };
     
@@ -724,10 +721,13 @@ static int P5_SaveShape(lua_State *L) {
 
 static int P5_Shape(lua_State *L) {
   int pid = luaL_checkint(L, 1);
+  const VGfloat coords[9] = {
+    1.0f,0.0f,0.0f,0.0f,1.0f,0.0f,
+    luaL_checknumber(L, 2),luaL_checknumber(L, 3),1.0f
+  };
   vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
   vgGetMatrix(backup);
-  vgTranslate(luaL_checknumber(L,2),luaL_checknumber(L,3));
-  vgScale(1.0f,1.0f);
+  vgMultMatrix(coords);
   vgDrawPath(shape_paths[pid], fillEnable | strokeEnable);
   vgLoadMatrix(backup);
   return 0;
@@ -1150,7 +1150,6 @@ static int P5_ImageHeight(lua_State *L) {
 }
 
 static int P5_Image(lua_State *L) {
-    VGfloat matrix[9];
     VGPaint fill;
     int imageId = luaL_checknumber(L, 1);
     float w = iWidth[imageId];
@@ -1162,7 +1161,7 @@ static int P5_Image(lua_State *L) {
         h = luaL_checknumber(L,5);
     }
     vgSeti(VG_MATRIX_MODE, VG_MATRIX_IMAGE_USER_TO_SURFACE);
-    vgGetMatrix(matrix);
+    vgGetMatrix(backup);
     switch (imageMode) {
         case P5_CENTER:
             x = x - w/2;
@@ -1173,12 +1172,14 @@ static int P5_Image(lua_State *L) {
             h = abs(h - y);
             break;
     }
-    float sx = w/iWidth[imageId];
-    float sy = h/iHeight[imageId];
-    vgTranslate(x,y);
-    vgScale(sx,sy);
+    const VGfloat coords[9] = {
+        w/iWidth[imageId],0.0f,0.0f,
+        0.0f,h/iHeight[imageId],0.0f,
+        x,y,1.0f
+    };
+    vgMultMatrix(coords);
     vgDrawImage(images[imageId]);
-    vgLoadMatrix(matrix);
+    vgLoadMatrix(backup);
     return 0;
 }
 
@@ -1522,6 +1523,7 @@ static int P5_Text(lua_State *L) {
     int i;
     for (i=0;i<strlen(str);i++)
         vgDrawGlyph(fonts[fontId],str[i],0,false);
+    
     int tWidth = VG_GLYPH_ORIGIN[0];
     switch (alignX) {
         case P5_LEFT:
@@ -1535,12 +1537,16 @@ static int P5_Text(lua_State *L) {
     }
     VG_GLYPH_ORIGIN[0] = 0;
     VG_GLYPH_ORIGIN[1] = 0;
+    
+    const VGfloat coords[9] = {
+        fSize[fontId]/10.0f,0.0f,0.0f,
+        0.0f,-fSize[fontId]/10.0f,0.0f,
+        x,y,1.0f
+    };
 
     vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
     vgGetMatrix(backup);
-    
-    vgTranslate(x,y);
-    vgScale(fSize[fontId]/10.0f,-fSize[fontId]/10.0f);
+    vgMultMatrix(coords);
     
     for (i=0;i<strlen(str);i++) {
         vgDrawGlyph(fonts[fontId],str[i],VG_FILL_PATH,false);
