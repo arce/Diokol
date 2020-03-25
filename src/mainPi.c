@@ -253,11 +253,7 @@ void vgResizeSurfaceSH(VGint width, VGint height) {}
 static int resizeWindow(int w,int h) {}
 
 void swapBuffers(void) {
-	VGErrorCode errCode = vgGetError();
-	if (errCode != VG_NO_ERROR) printf("Error code: %d\n",errCode);
-	eglSwapBuffers(state->display, state->surface);
-    errCode = vgGetError();
-    if (errCode != EGL_SUCCESS) printf("Error code: %d\n",errCode);
+  eglSwapBuffers(state->display, state->surface);
 }
 
 #ifdef WIN32
