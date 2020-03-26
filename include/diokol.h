@@ -1523,8 +1523,10 @@ static int P5_Text(lua_State *L) {
     VG_GLYPH_ORIGIN[0] = 0;
     VG_GLYPH_ORIGIN[1] = 0;
     int i;
-    for (i=0;i<strlen(str);i++)
-        vgDrawGlyph(fonts[fontId],str[i],0,false);
+    //for (i=0;i<strlen(str);i++)
+    //    vgDrawGlyph(fonts[fontId],str[i],0,false);
+    
+    vgDrawGlyphs(fonts[fontId],strlen(str),str,NULL,NULL,0,false);
     
     int tWidth = VG_GLYPH_ORIGIN[0];
     switch (alignX) {
@@ -1550,9 +1552,12 @@ static int P5_Text(lua_State *L) {
     vgGetMatrix(backup);
     vgMultMatrix(coords);
     
-    for (i=0;i<strlen(str);i++) {
-        vgDrawGlyph(fonts[fontId],str[i],VG_FILL_PATH,false);
-    }
+    //for (i=0;i<strlen(str);i++) {
+    //    vgDrawGlyph(fonts[fontId],str[i],VG_FILL_PATH,false);
+    // }
+    
+    vgDrawGlyphs(fonts[fontId],strlen(str),str,NULL,NULL,VG_FILL_PATH,false);
+    
     //    for (i=0;i<strlen(str);i++)
     //        vgDrawGlyph(fonts[fontId],str[i],VG_STROKE_PATH,false);
     vgLoadMatrix(backup);
