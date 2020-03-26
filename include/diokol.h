@@ -209,8 +209,11 @@ static VGPath point_path = VG_INVALID_HANDLE;
 static VGPath line_path = VG_INVALID_HANDLE;
 static VGPath arc_path = VG_INVALID_HANDLE;
 static VGPath ellipse_path = VG_INVALID_HANDLE;
+static VGPath poly_path = VG_INVALID_HANDLE;
 static VGPath shape_path = VG_INVALID_HANDLE;
 static VGPath shape_paths[100] = {VG_INVALID_HANDLE};
+
+static VGuint lastLineColor;
 
 void bail(lua_State *L, int error, char *msg){
   printf("\nFATAL ERROR:\n  %s: %s\n\n",msg, lua_tostring(L, -1));
@@ -388,6 +391,10 @@ static void createPaths() {
     1.0f, 0.0f, 4, 4, capabilites);
   vguEllipse(ellipse_path, 0.0f, 0.0f, 1.0f, 1.0f);
   
+  poly_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 4, 4, capabilites);
+  vguPolygon(poly_path, (const VGfloat[]) {0.0f,0.0f,1.0f,1.0f}, 2, VG_FALSE);
+    
   arc_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
     1.0f, 0.0f, 4, 4, capabilites);
 
@@ -470,45 +477,46 @@ static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
 }
 
 static int P5_Circle(lua_State *L) {
-    VGfloat a = luaL_checknumber(L, 1);
-    VGfloat b = luaL_checknumber(L, 2);
-    VGfloat c = luaL_checknumber(L, 3);
-    
-    return _Ellipse(a,b,c,c);
+  return _Ellipse(
+      luaL_checknumber(L, 1),
+      luaL_checknumber(L, 2),
+      luaL_checknumber(L, 3),
+      luaL_checknumber(L, 3));
 }
 
 static int P5_Ellipse(lua_State *L) {
-    VGfloat a = luaL_checknumber(L, 1);
-    VGfloat b = luaL_checknumber(L, 2);
-    VGfloat c = luaL_checknumber(L, 3);
-    VGfloat d = luaL_checknumber(L, 4);
-    
-    return _Ellipse(a,b,c,d);
+  return _Ellipse(
+    luaL_checknumber(L, 1),
+    luaL_checknumber(L, 2),
+    luaL_checknumber(L, 3),
+    luaL_checknumber(L, 4));
 }
 
-#define MAX(x, y) (((x) > (y)) ? (x) : (y))
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
-
 static int P5_Line(lua_State *L) {
-    VGfloat x1 = luaL_checknumber(L, 1);
-    VGfloat y1 = luaL_checknumber(L, 2);
-    VGfloat x2 = luaL_checknumber(L, 3);
-    VGfloat y2 = luaL_checknumber(L, 4);
-    
-    VGfloat minx = MIN(x1,x2);
-    VGfloat miny = MAX(y1,y2);
     
     const VGfloat coords[4] = {
-      x1-minx,y1-miny,x2-minx,y2-miny
+        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3),luaL_checknumber(L, 4)
+    };
+    
+    vgModifyPathCoords(poly_path, 0, 2, coords);
+    if (strokeEnable)
+        vgDrawPath(poly_path, VG_STROKE_PATH);
+    
+    return 0;
+}
+
+static int _P5_Line(lua_State *L) {
+    
+    const VGfloat coords[4] = {
+      luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+      luaL_checknumber(L, 3),luaL_checknumber(L, 4)
     };
     
     vgModifyPathCoords(line_path, 0, 2, coords);
-    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
-    vgGetMatrix(backup);
-    vgTranslate(minx,miny);
     if (strokeEnable)
         vgDrawPath(line_path, VG_STROKE_PATH);
-    vgLoadMatrix(backup);
+    
     return 0;
 }
 
@@ -527,7 +535,7 @@ static int P5_Point(lua_State *L) {
     return 0;
 }
 
-static int P5_Rect(VGfloat x, VGfloat y, VGfloat w, VGfloat h) {
+static int P5_Rect(lua_State *L) {
      VGfloat coords[5] = {
       luaL_checknumber(L, 1),luaL_checknumber(L, 2),
       luaL_checknumber(L, 3),luaL_checknumber(L, 4),
