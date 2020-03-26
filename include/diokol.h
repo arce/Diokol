@@ -488,14 +488,20 @@ static int P5_Ellipse(lua_State *L) {
 
 static int P5_Line(lua_State *L) {
     const VGfloat coords[4] = {
-      luaL_checknumber(L, 1),
-      luaL_checknumber(L, 2),
-      luaL_checknumber(L, 3),
+      0,0,luaL_checknumber(L, 3),
       luaL_checknumber(L, 4)
     };
-    
+    const VGfloat matrix[9] = {
+        1.0f,0.0f,0.0f,0.0f,1.0f,0.0f,
+        luaL_checknumber(L, 1),luaL_checknumber(L, 2),1.0f
+    };
     vgModifyPathCoords(line_path, 0, 2, coords);
-    vgDrawPath(line_path, fillEnable | strokeEnable);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(backup);
+    vgMultMatrix(matrix);
+    if (strokeEnable)
+        vgDrawPath(line_path, VG_STROKE_PATH);
+    vgLoadMatrix(backup);
     return 0;
 }
 
