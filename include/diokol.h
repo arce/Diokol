@@ -416,7 +416,7 @@ static int P5_Arc(lua_State *L) {
     else if (type == P5_OPEN)
         arcType = VGU_ARC_OPEN;
     
-    vgClearPath(arc_path, VG_PATH_CAPABILITY_APPEND_TO  | VG_PATH_CAPABILITY_MODIFY);
+    vgClearPath(arc_path, VG_PATH_CAPABILITY_APPEND_TO);
     switch (ellipseMode) {
       case P5_CORNERS:
         vguArc(arc_path,(x+a)/2.0f,(y+b)/2.0f, a-x, b-y,start,stop-start,arcType);
@@ -486,18 +486,29 @@ static int P5_Ellipse(lua_State *L) {
     return _Ellipse(a,b,c,d);
 }
 
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 static int P5_Line(lua_State *L) {
+    VGfloat x1 = luaL_checknumber(L, 1);
+    VGfloat y1 = luaL_checknumber(L, 2);
+    VGfloat x2 = luaL_checknumber(L, 3);
+    VGfloat y2 = luaL_checknumber(L, 4);
+    
+    VGfloat minx = MIN(x1,x2);
+    VGfloat miny = MAX(y1,y2);
+    
     const VGfloat coords[4] = {
-      luaL_checknumber(L, 1),
-      luaL_checknumber(L, 2),
-      luaL_checknumber(L, 3),
-      luaL_checknumber(L, 4)
+      x1-minx,y1-miny,x2-minx,y2-miny
     };
     
     vgModifyPathCoords(line_path, 0, 2, coords);
+    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+    vgGetMatrix(backup);
+    vgTranslate(minx,miny);
     if (strokeEnable)
         vgDrawPath(line_path, VG_STROKE_PATH);
-    
+    vgLoadMatrix(backup);
     return 0;
 }
 
