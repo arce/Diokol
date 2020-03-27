@@ -211,6 +211,8 @@ static VGPath arc_path = VG_INVALID_HANDLE;
 static VGPath ellipse_path = VG_INVALID_HANDLE;
 static VGPath poly_path = VG_INVALID_HANDLE;
 static VGPath shape_path = VG_INVALID_HANDLE;
+static VGPath cbezier_path = VG_INVALID_HANDLE;
+static VGPath qbezier_path = VG_INVALID_HANDLE;
 static VGPath shape_paths[100] = {VG_INVALID_HANDLE};
 
 static VGuint lastLineColor;
@@ -394,12 +396,59 @@ static void createPaths() {
   poly_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
     1.0f, 0.0f, 4, 4, capabilites);
   vguPolygon(poly_path, (const VGfloat[]) {0.0f,0.0f,1.0f,1.0f}, 2, VG_FALSE);
+
+  VGubyte segments[] = { VG_MOVE_TO_ABS, VG_CUBIC_TO };
+  VGfloat coords[] = { 0.0f, 0.0f, 1.0f, -1.0f, 2.0f, 1.0f, 3.0f, 0.0f };
+    
+  cbezier_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+     1.0f, 0.0f, 2, 8, capabilites);
+  vgAppendPathData(cbezier_path, 2, segments, coords);
+    
+  qbezier_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 2, 6, capabilites);
+  segments[1] = VG_QUAD_TO;
+  vgAppendPathData(qbezier_path, 2, segments, coords);
     
   arc_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
     1.0f, 0.0f, 4, 4, capabilites);
 
+
   //shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
    // 1.0f, 0.0f, 4, 4, capabilites | VG_PATH_CAPABILITY_APPEND_FROM);
+}
+
+static int _P5_Bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
+  const VGfloat coords[8] = {x1,y1,x2,y2,x3,y3,x4,y4};
+  vgModifyPathCoords(cbezier_path, 0, 2, coords);
+  vgDrawPath(cbezier_path, fillEnable | strokeEnable);
+  return 0;
+}
+
+static int P5_Bezier(lua_State *L) {
+  const float x1 = luaL_checknumber(L, 1);
+  const float y1 = luaL_checknumber(L, 2);
+  const float x2 = luaL_checknumber(L, 3);
+  const float y2 = luaL_checknumber(L, 4);
+  const float x3 = luaL_checknumber(L, 5);
+  const float y3 = luaL_checknumber(L, 6);
+  const float x4 = luaL_checknumber(L, 7);
+  const float y4 = luaL_checknumber(L, 8);
+
+  return _P5_Bezier(x1,y1,x2,y2,x3,y3,x4,y4);
+}
+
+static int P5_QBezier(lua_State *L) {
+    const VGfloat coords[8] = {
+        luaL_checknumber(L, 1),
+        luaL_checknumber(L, 2),
+        luaL_checknumber(L, 3),
+        luaL_checknumber(L, 4),
+        luaL_checknumber(L, 5),
+        luaL_checknumber(L, 6)
+    };
+    
+    vgModifyPathCoords(qbezier_path, 0, 2, coords);
+    vgDrawPath(qbezier_path, fillEnable | strokeEnable);
 }
 
 static int P5_Arc(lua_State *L) {
@@ -407,10 +456,9 @@ static int P5_Arc(lua_State *L) {
     VGfloat x,y,a,b,start,stop,type;
     x = luaL_checknumber(L, 1);
     y = luaL_checknumber(L, 2);
-    a = luaL_checknumber(L, 3);
-    b = luaL_checknumber(L, 4);
-    start = _deg(luaL_checknumber(L, 5));
-    stop = _deg(luaL_checknumber(L, 6));
+    a = b = luaL_checknumber(L, 3);
+    start = _deg(luaL_checknumber(L, 4));
+    stop = _deg(luaL_checknumber(L, 5));
     
     if (lua_gettop(L) == 7)
         type = luaL_checkint(L, 7);
@@ -470,10 +518,42 @@ static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
     };
     
     vgModifyPathCoords(ellipse_path, 0, 3, coords);
-    
     vgDrawPath(ellipse_path, fillEnable | strokeEnable);
-    
     return 0;
+}
+
+static void getPointAtAngle(float points[], float angle, float x, float y, float radius) {
+    points[0] = x + radius * cos(angle);
+    points[1] = y + radius * sin(angle);
+}
+
+static int _P5_Arc(lua_State *L) {
+  const float xc = luaL_checknumber(L, 1);
+  const float yc = luaL_checknumber(L, 2);
+  const float radius = luaL_checknumber(L, 3);
+  const float start = _deg(luaL_checknumber(L, 4));
+  const float stop = _deg(luaL_checknumber(L, 5));
+    
+  const float x1 = xc + radius * cos(start);
+  const float y1 = yc + radius * sin(start);
+
+  const float x4 = xc + radius * cos(stop);
+  const float y4 = yc + radius * sin(stop);
+
+  const float  ax = x1 - xc;
+  const float  ay = y1 - yc;
+  const float  bx = x4 - xc;
+  const float  by = y4 - yc;
+  const float  q1 = ax * ax + ay * ay;
+  const float  q2 = q1 + ax * bx + ay * by;
+  const float  k2 = 4/3 * (sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
+
+  const float x2 = xc + ax - k2 * ay;
+  const float  y2 = yc + ay + k2 * ax;
+  const float  x3 = xc + bx + k2 * by;
+  const float  y3 = yc + by - k2 * bx;
+  
+  return _P5_Bezier(x1,y1,x2,y2,x3,y3,x4,y4);
 }
 
 static int P5_Circle(lua_State *L) {
@@ -2021,6 +2101,12 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     lua_pushcfunction(L,P5_Width);
     lua_setglobal(L,"width");
     
+    lua_pushcfunction(L,P5_Bezier);
+    lua_setglobal(L,"bezier");
+    
+    lua_pushcfunction(L,P5_QBezier);
+    lua_setglobal(L,"qbezier");
+
     lua_pushcfunction(L,P5_Arc);
     lua_setglobal(L,"arc");
     
