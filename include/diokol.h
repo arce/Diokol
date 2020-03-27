@@ -204,15 +204,17 @@ lua_State *L;
 
 // hold the paths for basic shapes. Shapes that need a variable number
 // of segments are handled by common_path.
-static VGPath rect_path = VG_INVALID_HANDLE;
-static VGPath point_path = VG_INVALID_HANDLE;
-static VGPath line_path = VG_INVALID_HANDLE;
 static VGPath arc_path = VG_INVALID_HANDLE;
 static VGPath ellipse_path = VG_INVALID_HANDLE;
-static VGPath poly_path = VG_INVALID_HANDLE;
+static VGPath line_path = VG_INVALID_HANDLE;
+static VGPath point_path = VG_INVALID_HANDLE;
+static VGPath quad_path = VG_INVALID_HANDLE;
+static VGPath rect_path = VG_INVALID_HANDLE;
+static VGPath triangle_path = VG_INVALID_HANDLE;
+static VGPath bezier_path = VG_INVALID_HANDLE;
+static VGPath curve_path = VG_INVALID_HANDLE;
+
 static VGPath shape_path = VG_INVALID_HANDLE;
-static VGPath cbezier_path = VG_INVALID_HANDLE;
-static VGPath qbezier_path = VG_INVALID_HANDLE;
 static VGPath shape_paths[100] = {VG_INVALID_HANDLE};
 
 static VGuint lastLineColor;
@@ -370,88 +372,62 @@ static int P5_Width(lua_State *L) {
 // quad()
 // rect()
 // square()
-// triangle
+// triangle()
+// bezier()
+// quad()
 
 static void createPaths() {
     
   VGbitfield capabilites = VG_PATH_CAPABILITY_APPEND_TO |
                            VG_PATH_CAPABILITY_MODIFY;
     
-  rect_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-    1.0f, 0.0f, 5, 5, capabilites);
-  vguRect(rect_path, 0.0f, 0.0f, 1.0f, 1.0f);
+  arc_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 4, 4, capabilites);
+  vguArc(arc_path,0,0,1,1,0,2*M_PI,VGU_ARC_PIE);
+    
+  ellipse_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 4, 12, capabilites);
+  vguEllipse(ellipse_path, 0.0f, 0.0f, 1.0f, 1.0f);
+
+  line_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 2, 4, capabilites);
+  vguLine(line_path, 0.0f, 0.0f, 1.0f, 1.0f);
 
   point_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
     1.0f, 0.0f, 5, 5, capabilites);
   vguRect(point_path, 0.0f, 0.0f, 1.0f, 1.0f);
-
-  line_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-    1.0f, 0.0f, 4, 4, capabilites);
-  vguLine(line_path, 0.0f, 0.0f, 1.0f, 1.0f);
-
-  ellipse_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-    1.0f, 0.0f, 4, 4, capabilites);
-  vguEllipse(ellipse_path, 0.0f, 0.0f, 1.0f, 1.0f);
   
-  poly_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-    1.0f, 0.0f, 4, 4, capabilites);
-  vguPolygon(poly_path, (const VGfloat[]) {0.0f,0.0f,1.0f,1.0f}, 2, VG_FALSE);
+  VGfloat points[] = {0.0f,0.0f,0.0f,1.0f,1.0f,1.0f,1.0f,0.0f};
+    
+  quad_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 2, 5, capabilites);
+  vguPolygon(quad_path, points, 4, VG_TRUE);
+    
+  rect_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 2, 5, capabilites);
+  vguRect(rect_path, 0.0f, 0.0f, 1.0f, 1.0f);
+  
+  triangle_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 2, 6, capabilites);
+  vguPolygon(triangle_path, points, 3, VG_TRUE);
 
   VGubyte segments[] = { VG_MOVE_TO_ABS, VG_CUBIC_TO };
   VGfloat coords[] = { 0.0f, 0.0f, 1.0f, -1.0f, 2.0f, 1.0f, 3.0f, 0.0f };
-    
-  cbezier_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+
+  bezier_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
      1.0f, 0.0f, 2, 8, capabilites);
-  vgAppendPathData(cbezier_path, 2, segments, coords);
+  vgAppendPathData(bezier_path, 2, segments, coords);
     
-  qbezier_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+  curve_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
     1.0f, 0.0f, 2, 6, capabilites);
   segments[1] = VG_QUAD_TO;
-  vgAppendPathData(qbezier_path, 2, segments, coords);
+  vgAppendPathData(curve_path, 2, segments, coords);
     
-  arc_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-    1.0f, 0.0f, 4, 4, capabilites);
-
-
-  //shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
-   // 1.0f, 0.0f, 4, 4, capabilites | VG_PATH_CAPABILITY_APPEND_FROM);
+  shape_path = vgCreatePath(VG_PATH_FORMAT_STANDARD, VG_PATH_DATATYPE_F,
+    1.0f, 0.0f, 2, 6, capabilites);
 }
 
-static int _P5_Bezier(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
-  const VGfloat coords[8] = {x1,y1,x2,y2,x3,y3,x4,y4};
-  vgModifyPathCoords(cbezier_path, 0, 2, coords);
-  vgDrawPath(cbezier_path, fillEnable | strokeEnable);
-  return 0;
-}
-
-static int P5_Bezier(lua_State *L) {
-  const float x1 = luaL_checknumber(L, 1);
-  const float y1 = luaL_checknumber(L, 2);
-  const float x2 = luaL_checknumber(L, 3);
-  const float y2 = luaL_checknumber(L, 4);
-  const float x3 = luaL_checknumber(L, 5);
-  const float y3 = luaL_checknumber(L, 6);
-  const float x4 = luaL_checknumber(L, 7);
-  const float y4 = luaL_checknumber(L, 8);
-
-  return _P5_Bezier(x1,y1,x2,y2,x3,y3,x4,y4);
-}
-
-static int P5_QBezier(lua_State *L) {
-    const VGfloat coords[8] = {
-        luaL_checknumber(L, 1),
-        luaL_checknumber(L, 2),
-        luaL_checknumber(L, 3),
-        luaL_checknumber(L, 4),
-        luaL_checknumber(L, 5),
-        luaL_checknumber(L, 6)
-    };
-    
-    vgModifyPathCoords(qbezier_path, 0, 2, coords);
-    vgDrawPath(qbezier_path, fillEnable | strokeEnable);
-}
-
-static int _P5_Arc(lua_State *L) {
+static int P5_Arc(lua_State *L) {
     VGUArcType arcType = VGU_ARC_PIE;
     VGfloat x,y,a,b,start,stop,type;
     x = luaL_checknumber(L, 1);
@@ -473,18 +449,18 @@ static int _P5_Arc(lua_State *L) {
     
     vgClearPath(arc_path, VG_PATH_CAPABILITY_APPEND_TO);
     switch (ellipseMode) {
-      case P5_CORNERS:
-        vguArc(arc_path,(x+a)/2.0f,(y+b)/2.0f, a-x, b-y,start,stop-start,arcType);
-        break;
-      case P5_CENTER:
-        vguArc(arc_path,x,y,a,b,start,stop-start,arcType);
-        break;
-      case P5_RADIUS:
-        vguArc(arc_path,x,y,a*2.0f,b*2.0f,start,stop-start,arcType);
-        break;
-      case P5_CORNER:
-        vguArc(arc_path,x+a/2.0f,y+b/2.0f,a,b,start,stop-start,arcType);
-        break;
+        case P5_CORNERS:
+            vguArc(arc_path,(x+a)/2.0f,(y+b)/2.0f, a-x, b-y,start,stop-start,arcType);
+            break;
+        case P5_CENTER:
+            vguArc(arc_path,x,y,a,b,start,stop-start,arcType);
+            break;
+        case P5_RADIUS:
+            vguArc(arc_path,x,y,a*2.0f,b*2.0f,start,stop-start,arcType);
+            break;
+        case P5_CORNER:
+            vguArc(arc_path,x+a/2.0f,y+b/2.0f,a,b,start,stop-start,arcType);
+            break;
     }
     
     vgDrawPath(arc_path, fillEnable | strokeEnable);
@@ -522,110 +498,58 @@ static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
     return 0;
 }
 
-static int P5_Arc(lua_State *L) {
-  const float xc = luaL_checknumber(L, 1);
-  const float yc = luaL_checknumber(L, 2);
-  const float radius = luaL_checknumber(L, 3);
-  const float start = _deg(luaL_checknumber(L, 4));
-  const float stop = _deg(luaL_checknumber(L, 5));
-  
-  #ifdef __linux__
-  const float x1 = xc + radius * STBTT_cos(start);
-  const float y1 = yc + radius * STBTT_sin(start);
-  const float x4 = xc + radius * STBTT_cos(stop);
-  const float y4 = yc + radius * STBTT_sin(stop);
-  #else
-  const float x1 = xc + radius * cos(start);
-  const float y1 = yc + radius * sin(start);
-  const float x4 = xc + radius * cos(stop);
-  const float y4 = yc + radius * sin(stop);
-  #endif
-
-  const float  ax = x1 - xc;
-  const float  ay = y1 - yc;
-  const float  bx = x4 - xc;
-  const float  by = y4 - yc;
-  const float  q1 = ax * ax + ay * ay;
-  const float  q2 = q1 + ax * bx + ay * by;
-  #ifdef __linux__
-  const float  k2 = 4/3 * (STBTT_sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
-  #else
-  const float  k2 = 4/3 * (sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
-  #endif
-
-  const float x2 = xc + ax - k2 * ay;
-  const float  y2 = yc + ay + k2 * ax;
-  const float  x3 = xc + bx + k2 * by;
-  const float  y3 = yc + by - k2 * bx;
-  
-  return _P5_Bezier(x1,y1,x2,y2,x3,y3,x4,y4);
-}
-
 static int P5_Circle(lua_State *L) {
-  return _Ellipse(
-      luaL_checknumber(L, 1),
-      luaL_checknumber(L, 2),
-      luaL_checknumber(L, 3),
-      luaL_checknumber(L, 3));
+    return _Ellipse(luaL_checknumber(L, 1),
+                    luaL_checknumber(L, 2),
+                    luaL_checknumber(L, 3),
+                    luaL_checknumber(L, 3));
 }
 
 static int P5_Ellipse(lua_State *L) {
-  return _Ellipse(
-    luaL_checknumber(L, 1),
-    luaL_checknumber(L, 2),
-    luaL_checknumber(L, 3),
-    luaL_checknumber(L, 4));
+    return _Ellipse(
+                    luaL_checknumber(L, 1),
+                    luaL_checknumber(L, 2),
+                    luaL_checknumber(L, 3),
+                    luaL_checknumber(L, 4));
 }
 
 static int P5_Line(lua_State *L) {
+  const VGfloat coords[4] = {
+    luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+    luaL_checknumber(L, 3),luaL_checknumber(L, 4)
+  };
     
-    const VGfloat coords[4] = {
-        luaL_checknumber(L, 1),luaL_checknumber(L, 2),
-        luaL_checknumber(L, 3),luaL_checknumber(L, 4)
-    };
-    
-    vgModifyPathCoords(poly_path, 0, 2, coords);
-    if (strokeEnable)
-        vgDrawPath(poly_path, VG_STROKE_PATH);
-    
-    return 0;
-}
-
-static int _P5_Line(lua_State *L) {
-    
-    const VGfloat coords[4] = {
-      luaL_checknumber(L, 1),luaL_checknumber(L, 2),
-      luaL_checknumber(L, 3),luaL_checknumber(L, 4)
-    };
-    
-    vgModifyPathCoords(line_path, 0, 2, coords);
-    if (strokeEnable)
-        vgDrawPath(line_path, VG_STROKE_PATH);
-    
-    return 0;
+  vgModifyPathCoords(line_path, 0, 2, coords);
+  if (strokeEnable)
+    vgDrawPath(line_path, VG_STROKE_PATH);
+  return 0;
 }
 
 static int P5_Point(lua_State *L) {
-    const VGfloat coords[9] = {
-        1.0f,0.0f,0.0f,0.0f,1.0f,0.0f,
-        luaL_checknumber(L, 1),luaL_checknumber(L, 2),1.0f
-    };
-    
-    vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
-    vgGetMatrix(backup);
-    vgMultMatrix(coords);
-    if (strokeEnable)
-        vgDrawPath(point_path, VG_STROKE_PATH);
-    vgLoadMatrix(backup);
-    return 0;
+  vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
+  vgGetMatrix(backup);
+  vgTranslate(luaL_checknumber(L, 1),luaL_checknumber(L, 2));
+  if (fillEnable)
+    vgDrawPath(point_path, VG_FILL_PATH);
+  vgLoadMatrix(backup);
+  return 0;
 }
 
-static int P5_Rect(lua_State *L) {
-     VGfloat coords[5] = {
-      luaL_checknumber(L, 1),luaL_checknumber(L, 2),
-      luaL_checknumber(L, 3),luaL_checknumber(L, 4),
-      -luaL_checknumber(L, 3),
-    };
+static int P5_Quad(lua_State *L) {
+  const VGfloat coords[8] = {
+    luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+    luaL_checknumber(L, 3),luaL_checknumber(L, 4),
+    luaL_checknumber(L, 5),luaL_checknumber(L, 6),
+    luaL_checknumber(L, 7),luaL_checknumber(L, 8),
+  };
+    
+  vgModifyPathCoords(quad_path, 0, 4, coords);
+  vgDrawPath(quad_path, fillEnable | strokeEnable);
+  return 0;
+}
+
+static int _Rect(float a, float b, float c, float d) {
+    VGfloat coords[5] = {a,b,c,d,-c};
     
     switch (rectMode) {
         case P5_CORNER:
@@ -649,9 +573,55 @@ static int P5_Rect(lua_State *L) {
     };
     
     vgModifyPathCoords(rect_path, 0, 4, coords);
-    
     vgDrawPath(rect_path, fillEnable | strokeEnable);
     return 0;
+}
+
+static int P5_Rect(lua_State *L) {
+  return _Rect(luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+               luaL_checknumber(L, 3),luaL_checknumber(L, 4));
+}
+    
+static int P5_Square(lua_State *L) {
+  return _Rect(luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+               luaL_checknumber(L, 3),luaL_checknumber(L, 3));
+}
+
+static int P5_Triangle(lua_State *L) {
+  const VGfloat coords[6] = {
+    luaL_checknumber(L, 1),luaL_checknumber(L, 2),
+    luaL_checknumber(L, 3),luaL_checknumber(L, 4),
+    luaL_checknumber(L, 5),luaL_checknumber(L, 6),
+  };
+    
+  vgModifyPathCoords(quad_path, 0, 3, coords);
+  vgDrawPath(quad_path, fillEnable | strokeEnable);
+  return 0;
+}
+
+static int P5_Bezier(lua_State *L) {
+  const VGfloat coords[8] = {
+    luaL_checknumber(L, 1), luaL_checknumber(L, 2),
+    luaL_checknumber(L, 3), luaL_checknumber(L, 4),
+    luaL_checknumber(L, 5), luaL_checknumber(L, 6),
+    luaL_checknumber(L, 7), luaL_checknumber(L, 8)
+  };
+
+  vgModifyPathCoords(bezier_path, 0, 2, coords);
+  vgDrawPath(bezier_path, fillEnable | strokeEnable);
+  return 0;
+}
+
+static int P5_Curve(lua_State *L) {
+  const VGfloat coords[6] = {
+    luaL_checknumber(L, 1), luaL_checknumber(L, 2),
+    luaL_checknumber(L, 3), luaL_checknumber(L, 4),
+    luaL_checknumber(L, 5), luaL_checknumber(L, 6)
+  };
+    
+  vgModifyPathCoords(curve_path, 0, 2, coords);
+  vgDrawPath(curve_path, fillEnable | strokeEnable);
+  return 0;
 }
 
 // Attributes:
@@ -2105,12 +2075,6 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     
     lua_pushcfunction(L,P5_Width);
     lua_setglobal(L,"width");
-    
-    lua_pushcfunction(L,P5_Bezier);
-    lua_setglobal(L,"bezier");
-    
-    lua_pushcfunction(L,P5_QBezier);
-    lua_setglobal(L,"qbezier");
 
     lua_pushcfunction(L,P5_Arc);
     lua_setglobal(L,"arc");
@@ -2118,14 +2082,32 @@ int luaRegisterAPI(int argc, const char * argv[]) {
     lua_pushcfunction(L,P5_Ellipse);
     lua_setglobal(L,"ellipse");
     
+    lua_pushcfunction(L,P5_Circle);
+    lua_setglobal(L,"circle");
+    
     lua_pushcfunction(L,P5_Line);
     lua_setglobal(L,"line");
     
     lua_pushcfunction(L,P5_Point);
     lua_setglobal(L,"point");
     
+    lua_pushcfunction(L,P5_Quad);
+    lua_setglobal(L,"quad");
+    
     lua_pushcfunction(L,P5_Rect);
     lua_setglobal(L,"rect");
+    
+    lua_pushcfunction(L,P5_Square);
+    lua_setglobal(L,"square");
+    
+    lua_pushcfunction(L,P5_Triangle);
+    lua_setglobal(L,"triangle");
+
+    lua_pushcfunction(L,P5_Bezier);
+    lua_setglobal(L,"bezier");
+
+    lua_pushcfunction(L,P5_Curve);
+    lua_setglobal(L,"curve");
     
     lua_pushcfunction(L,P5_EllipseMode);
     lua_setglobal(L,"ellipseMode");
