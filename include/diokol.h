@@ -451,7 +451,7 @@ static int P5_QBezier(lua_State *L) {
     vgDrawPath(qbezier_path, fillEnable | strokeEnable);
 }
 
-static int P5_Arc(lua_State *L) {
+static int _P5_Arc(lua_State *L) {
     VGUArcType arcType = VGU_ARC_PIE;
     VGfloat x,y,a,b,start,stop,type;
     x = luaL_checknumber(L, 1);
@@ -522,7 +522,7 @@ static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
     return 0;
 }
 
-static int _P5_Arc(lua_State *L) {
+static int P5_Arc(lua_State *L) {
   const float xc = luaL_checknumber(L, 1);
   const float yc = luaL_checknumber(L, 2);
   const float radius = luaL_checknumber(L, 3);
@@ -530,10 +530,10 @@ static int _P5_Arc(lua_State *L) {
   const float stop = _deg(luaL_checknumber(L, 5));
   
   #ifdef __linux__
-  const float x1 = xc + radius * STBT_cos(start);
-  const float y1 = yc + radius * STBT_sin(start);
-  const float x4 = xc + radius * STBT_cos(stop);
-  const float y4 = yc + radius * STBT_sin(stop);
+  const float x1 = xc + radius * STBTT_cos(start);
+  const float y1 = yc + radius * STBTT_sin(start);
+  const float x4 = xc + radius * STBTT_cos(stop);
+  const float y4 = yc + radius * STBTT_sin(stop);
   #else
   const float x1 = xc + radius * cos(start);
   const float y1 = yc + radius * sin(start);
@@ -548,7 +548,7 @@ static int _P5_Arc(lua_State *L) {
   const float  q1 = ax * ax + ay * ay;
   const float  q2 = q1 + ax * bx + ay * by;
   #ifdef __linux__
-  const float  k2 = 4/3 * (STBT_sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
+  const float  k2 = 4/3 * (STBTT_sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
   #else
   const float  k2 = 4/3 * (sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
   #endif
