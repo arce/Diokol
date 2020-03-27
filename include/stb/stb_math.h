@@ -22,8 +22,40 @@ int _iceil(float num) {
 
 #define STBTT_iceil(x)  _iceil(x)
 
+float _sin(float x) {
+  float sin;
+  if (x < -3.14159265)
+    x += 6.28318531;
+  else
+   if (x >  3.14159265)
+     x -= 6.28318531;
+
+  if (x < 0) {
+    sin = 1.27323954 * x + .405284735 * x * x;
+    
+    if (sin < 0)
+      sin = .225 * (sin *-sin - sin) + sin;
+    else
+      sin = .225 * (sin * sin - sin) + sin;
+  } else {
+    sin = 1.27323954 * x - 0.405284735 * x * x;
+    if (sin < 0)
+      sin = .225 * (sin *-sin - sin) + sin;
+    else
+      sin = .225 * (sin * sin - sin) + sin;
+  }
+  return sin;
+}
+
+#define STBTT_sin(x)  _sin(x)
+
 float _cos(float x) {
 	float cos;
+    if (x < -3.14159265)
+      x += 6.28318531;
+    else
+      if (x >  3.14159265)
+        x -= 6.28318531;
 	x += 1.57079632;
 	if (x >  3.14159265) x -= 6.28318531;
 	if (x < 0) {

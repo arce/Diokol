@@ -522,23 +522,24 @@ static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
     return 0;
 }
 
-static void getPointAtAngle(float points[], float angle, float x, float y, float radius) {
-    points[0] = x + radius * cos(angle);
-    points[1] = y + radius * sin(angle);
-}
-
 static int _P5_Arc(lua_State *L) {
   const float xc = luaL_checknumber(L, 1);
   const float yc = luaL_checknumber(L, 2);
   const float radius = luaL_checknumber(L, 3);
   const float start = _deg(luaL_checknumber(L, 4));
   const float stop = _deg(luaL_checknumber(L, 5));
-    
+  
+  #ifdef __linux__
+  const float x1 = xc + radius * STBT_cos(start);
+  const float y1 = yc + radius * STBT_sin(start);
+  const float x4 = xc + radius * STBT_cos(stop);
+  const float y4 = yc + radius * STBT_sin(stop);
+  #else
   const float x1 = xc + radius * cos(start);
   const float y1 = yc + radius * sin(start);
-
   const float x4 = xc + radius * cos(stop);
   const float y4 = yc + radius * sin(stop);
+  #endif
 
   const float  ax = x1 - xc;
   const float  ay = y1 - yc;
@@ -546,7 +547,11 @@ static int _P5_Arc(lua_State *L) {
   const float  by = y4 - yc;
   const float  q1 = ax * ax + ay * ay;
   const float  q2 = q1 + ax * bx + ay * by;
+  #ifdef __linux__
+  const float  k2 = 4/3 * (STBT_sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
+  #else
   const float  k2 = 4/3 * (sqrt(2 * q1 * q2) - q2) / (ax * by - ay * bx);
+  #endif
 
   const float x2 = xc + ax - k2 * ay;
   const float  y2 = yc + ay + k2 * ax;
