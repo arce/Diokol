@@ -198,8 +198,6 @@ int32_t clearColor = 0xAAAAAAFF;
 
 lua_State *L;
 
-// hold the paths for basic shapes. Shapes that need a variable number
-// of segments are handled by common_path.
 static VGPath arc_path = VG_INVALID_HANDLE;
 static VGPath ellipse_path = VG_INVALID_HANDLE;
 static VGPath line_path = VG_INVALID_HANDLE;
@@ -1613,18 +1611,19 @@ static int P5_Text(lua_State *L) {
   }
   VG_GLYPH_ORIGIN[0] = 0;
   VG_GLYPH_ORIGIN[1] = 0;
-  VGfloat matrix[9];
+  VGfloat matrix[] = {
+    fSize[fontId]*0.1f,0.0f,0.0f,
+    0.0f,-fSize[fontId]*0.1f,0.0f,
+    x,y,1.0f
+  };
   vgSeti(VG_MATRIX_MODE,VG_MATRIX_PATH_USER_TO_SURFACE);
-  vgGetMatrix(matrix);
-  vgTranslate(x,y);
-  vgScale(fSize[fontId]*0.1f,-fSize[fontId]*0.1f);
+  vgGetMatrix(backup);
+  vgMultMatrix(matrix);
   
-  for (i=0;i<strlen(str);i++) {
+  for (i=0;i<strlen(str);i++)
     vgDrawGlyph(fonts[fontId],str[i],VG_FILL_PATH,false);
-  }
-  //  for (i=0;i<strlen(str);i++)
-  //    vgDrawGlyph(fonts[fontId],str[i],VG_STROKE_PATH,false);
-  vgLoadMatrix(matrix);
+
+  vgLoadMatrix(backup);
   return 0;
 }
 
