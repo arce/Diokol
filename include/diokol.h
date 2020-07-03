@@ -175,6 +175,8 @@ bool eventFunc[] = {true,true,true,true,true,true,true,true};
 
 bool event[] = {false,false,false,false,false,false,false,false};
 
+int LEFT_BUTTON, RIGHT_BUTTON, MIDDLE_BUTTON, DOWN;
+
 double mouseX=0, mouseY=0;
 double pmouseX=0, pmouseY=0;
 double draggX=0, draggY=0;
@@ -832,47 +834,45 @@ static int P5_IsMousePressed(lua_State *L) {
   return 1;
 }
 
-static int Dkl_MousePressed(int xpos, int ypos,int button) {
-  pmouseX = mouseX;
-  pmouseY = mouseY;
-  mouseX = xpos;
-  mouseY = ypos;
-  if (button)
-    mouseButton = P5_RIGHT;
-  else
-    mouseButton = P5_LEFT;
-  eventType = MOUSE_PRESSED;
-  isEvent[MOUSE_PRESSED] = true;
-  return 0;
-}
+static void keyboardFunc(unsigned char key,int x, int y) {}
 
-static int Dkl_MouseReleased(int xpos, int ypos, int button) {
+static void mouseFunc(int button, int state,int xpos, int ypos) {
   pmouseX = mouseX;
   pmouseY = mouseY;
   mouseX = xpos;
   mouseY = ypos;
-  if (button)
-    mouseButton = P5_RIGHT;
-  else
+  if (button==LEFT_BUTTON) {
     mouseButton = P5_LEFT;
-  eventType = MOUSE_RELEASED;
-  isEvent[MOUSE_RELEASED] = true;
-  return 0;
-}
-
-static int Dkl_MouseMoved(int xpos, int ypos, int dragged) {
-  pmouseX = mouseX;
-  pmouseY = mouseY;
-  mouseX = xpos;
-  mouseY = ypos;
-  if (dragged) {
-    eventType = MOUSE_DRAGGED;
-    isEvent[MOUSE_DRAGGED] = true;
+  } else if (button==RIGHT_BUTTON) {
+    mouseButton = P5_RIGHT;
   } else {
-    eventType = MOUSE_MOVED;
-    isEvent[MOUSE_MOVED] = true;
+    mouseButton = P5_MIDDLE;
   }
-  return 0;
+  if (state=DOWN) {
+    eventType = MOUSE_PRESSED;
+    isEvent[MOUSE_PRESSED] = true;
+  } else {
+    eventType = MOUSE_RELEASED;
+    isEvent[MOUSE_RELEASED] = true;
+  }
+}
+
+static void motionFunc(int xpos, int ypos) {
+  pmouseX = mouseX;
+  pmouseY = mouseY;
+  mouseX = xpos;
+  mouseY = ypos;
+  eventType = MOUSE_DRAGGED;
+  isEvent[MOUSE_DRAGGED] = true;
+}
+
+static void passiveMotionFunc(int xpos, int ypos) {
+  pmouseX = mouseX;
+  pmouseY = mouseY;
+  mouseX = xpos;
+  mouseY = ypos;
+  eventType = MOUSE_MOVED;
+  isEvent[MOUSE_DRAGGED] = true;
 }
 
 static void Dkl_ProcessEvent(int eventType) {
