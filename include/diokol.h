@@ -40,9 +40,6 @@
 #    define M_PI 3.14159265358979323846f
 #endif
 
-#ifndef __APPLE__
-typedef int bool;
-#endif
 #define true 1
 #define false 0
 #define NIL -1

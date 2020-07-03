@@ -9,7 +9,7 @@
 #include "VG/vgu.h"
 #include "diokol.h"
 
-static void DisplayFunc(void) {
+static void displayFunc(void) {
 
   drawScene();
   glutSwapBuffers();
@@ -37,7 +37,7 @@ void app_close() {
   vgDestroyContextSH();
 }
 
-void IdleFunc(void) {
+void idleFunc(void) {
   glutPostRedisplay();
 }
 
@@ -69,13 +69,13 @@ int main(int argc, char **argv) {
   glutCreateWindow("Diököl");
 
   glutReshapeFunc(resizeWindow);
-  glutDisplayFunc(DisplayFunc);
-  glutIdleFunc(IdleFunc);
+  glutDisplayFunc(displayFunc);
+  glutIdleFunc(idleFunc);
   
-  glutKeyboardFunc(KeyboardFunc);
-  glutMouseFunc(MouseFunc);
-  glutMotionFunc(MotionFunc);
-  glutPassiveMotionFunc(PassiveMotionFunc);
+  glutKeyboardFunc(keyboardFunc);
+  glutMouseFunc(mouseFunc);
+  glutMotionFunc(motionFunc);
+  glutPassiveMotionFunc(passiveMotionFunc);
 
   initOpenVG(640,480);
   lua_init(argc,argv);
