@@ -460,30 +460,32 @@ static int P5_Arc(lua_State *L) {
   return 0;
 }
 
-static int _Ellipse(VGfloat a, VGfloat b, VGfloat c, VGfloat d) {
+static int _Ellipse(VGfloat cx, VGfloat cy, VGfloat w, VGfloat h) {
+  VGfloat coords[12] = {
+    cx+w/2, cy,
+    w*0.5f, h*0.5f, 0.0f, -w, 0.0f,
+    w*0.5f, h*0.5f, 0.0f,  w, 0.0f
+  };
+  
   switch (ellipseMode) {
     case P5_CENTER:
       break;
-    case P5_CORNER:
-      a = a + c * 0.5f;
-      b = b + d * 0.5f;
-      break;
     case P5_CORNERS:
-      a = (a + c) * 0.5f ;
-      b = (b + d) * 0.5f;
-      c = (c - a) * 2.0f;
-      d = (d - b) * 2.0f;
+      coords[2] =  coords[2] - coords[0];
+      coords[3] =  coords[3] - coords[1];
+      coords[5] = - coords[2];
+      break;
+    case P5_CORNER:
+      coords[0] = coords[0] - coords[2]*0.5f;
+      coords[1] = coords[1] - coords[3]*0.5f;
       break;
     case P5_RADIUS:
-      c = c * 2.0f;
-      d = d * 2.0f;
+      coords[0] = coords[0] - coords[2];
+      coords[1] = coords[1] - coords[3];
+      coords[2] = coords[2] * 2;
+      coords[3] = coords[3] * 2;
+      coords[5] = - coords[2];
       break;
-  };
-  
-  const VGfloat coords[12] = {
-    (a+c)*0.5f, b,
-    c*0.5f, d*0.5f, 0.0f, -c, 0.0f,
-    c*0.5f, d*0.5f, 0.0f,  c, 0.0f
   };
   
   vgModifyPathCoords(ellipse_path, 0, 3, coords);

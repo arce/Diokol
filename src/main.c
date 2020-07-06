@@ -64,10 +64,13 @@ int main(int argc, char **argv) {
                        GLUT_STENCIL | GLUT_MULTISAMPLE);
 #endif
 
-  glutInitWindowPosition(0, 0);
-  glutInitWindowSize(640, 480);
   glutCreateWindow("Diököl");
 
+  glutInitWindowPosition(0, 0);
+  glutInitWindowSize(width, height);
+
+  glutReshapeWindow(width, height);
+  
   glutReshapeFunc(resizeWindow);
   glutDisplayFunc(displayFunc);
   glutIdleFunc(idleFunc);
