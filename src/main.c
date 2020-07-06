@@ -9,8 +9,11 @@
 #include "VG/vgu.h"
 #include "diokol.h"
 
+int window;
+
 static void displayFunc(void) {
 
+  if (done) glutDestroyWindow(window);
   drawScene();
   glutSwapBuffers();
   // glFlush();
@@ -64,7 +67,7 @@ int main(int argc, char **argv) {
                        GLUT_STENCIL | GLUT_MULTISAMPLE);
 #endif
 
-  glutCreateWindow("Diököl");
+  window = glutCreateWindow("Diököl");
 
   glutInitWindowPosition(0, 0);
   glutInitWindowSize(width, height);
