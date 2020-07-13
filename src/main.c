@@ -12,10 +12,10 @@
 int window;
 
 static void displayFunc(void) {
-
-  if (done) glutDestroyWindow(window);
+  
   drawScene();
   glutSwapBuffers();
+  if (done) exit(0);
   // glFlush();
 }
 

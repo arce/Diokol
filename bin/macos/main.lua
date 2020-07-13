@@ -41,6 +41,7 @@ function draw()
   stroke(0)
   line(90, 150, 80, 160)
   line(110, 150, 120, 160)
+  exit()
 end
 
 function mouseMoved(x,y)
