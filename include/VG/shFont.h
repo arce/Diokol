@@ -130,7 +130,7 @@ void vgDrawGlyph(	VGFont font,
 						VGboolean allowAutoHinting) {
 	SHFont *f = (SHFont*)font;
 	if (paintModes!=0) {
-		VGint _matrix[9];
+		VGfloat _matrix[9];
 		VGboolean is_path = f->glyphs[glyphIndex].is_path;
 		if (is_path)
 			vgSeti(VG_MATRIX_MODE, VG_MATRIX_PATH_USER_TO_SURFACE);
@@ -159,7 +159,7 @@ void vgDrawGlyphs(VGFont font,
 	SHFont *f = (SHFont*)font;
 	int i;
 	float adjx=0,adjy=0;
-	VGint matrix[9];
+	VGfloat matrix[9];
 	vgGetMatrix(matrix);
 	for (i=0;i<glyphCount;i++) {
 		if (adjustments_x!=NULL) adjx = adjustments_x[i];
