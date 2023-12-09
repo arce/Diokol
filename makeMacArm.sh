@@ -1,0 +1,1 @@
+gcc src/mainMac2.m -framework OpenGL -framework Cocoa -lglew -lluajit -lOpenVG -o ./bin/macArm/Diököl -L./lib/macArm -I./include -pagezero_size 10000 -image_base 10000000

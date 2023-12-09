@@ -1,3 +1,5 @@
+#ifndef __DIOKOL_H__
+#define __DIOKOL_H__ 
 /*
  --
  -- diokol.h
@@ -2316,3 +2318,4 @@ void lua_init(int argc, const char * argv[]) {
   initialized=true;
   srand(time(NULL));
 }
+#endif

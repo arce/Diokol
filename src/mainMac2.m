@@ -210,61 +210,61 @@ NSOpenGLView *view;
     NSPoint p;
     p = [theEvent locationInWindow];
     p = [self convertPoint: p fromView: nil];
-    Dkl_MousePressed(p.x, p.y, 0);
+//    Dkl_MousePressed(p.x, p.y, 0);
 }
 
 - (void) mouseDragged:(NSEvent *)theEvent {
     NSPoint p;
     p = [theEvent locationInWindow];
     p = [self convertPoint: p fromView: nil];
-    Dkl_MouseMoved(p.x, p.y, 1);
+//    Dkl_MouseMoved(p.x, p.y, 1);
 }
 
 - (void) mouseUp: (NSEvent *)theEvent {
     NSPoint p;
     p = [theEvent locationInWindow];
     p = [self convertPoint: p fromView: nil];
-    Dkl_MouseReleased(p.x, p.y, 0);
+//    Dkl_MouseReleased(p.x, p.y, 0);
 }
 
 - (void) mouseMoved:(NSEvent *)theEvent {
     NSPoint p;
     p = [theEvent locationInWindow];
     p = [self convertPoint: p fromView: nil];
-    Dkl_MouseMoved(p.x, p.y, 0);
+//    Dkl_MouseMoved(p.x, p.y, 0);
 }
 
 - (void) rightMouseDown: (NSEvent *)theEvent {
     NSPoint p;
     p = [theEvent locationInWindow];
     p = [self convertPoint: p fromView: nil];
-    Dkl_MousePressed(p.x, p.y, 1);
+//    Dkl_MousePressed(p.x, p.y, 1);
 }
 
 - (void) rightMouseDragged:(NSEvent *)theEvent {
     NSPoint p;
     p = [theEvent locationInWindow];
     p = [self convertPoint: p fromView: nil];
-    Dkl_MouseMoved(p.x, p.y, 1);
+//    Dkl_MouseMoved(p.x, p.y, 1);
 }
 
 - (void) rightMouseUp: (NSEvent *)theEvent {
     NSPoint p;
     p = [theEvent locationInWindow];
     p = [self convertPoint: p fromView: nil];
-    Dkl_MouseReleased(p.x, p.y, 1);
+//    Dkl_MouseReleased(p.x, p.y, 1);
 }
 
 - (void) keyDown:(NSEvent *)theEvent {
     char *str = [[theEvent characters] UTF8String];
     unsigned short keyCode = [theEvent keyCode];
-    Dkl_KeyPressed(str[0],keyCode);
+//    Dkl_KeyPressed(str[0],keyCode);
 }
 
 - (void) keyUp:(NSEvent *)theEvent {
     char *str = [[theEvent characters] UTF8String];
     unsigned short keyCode = [theEvent keyCode];
-    Dkl_KeyReleased(str[0],keyCode);
+//    Dkl_KeyReleased(str[0],keyCode);
 }
 
 - (BOOL) acceptsFirstResponder {
